@@ -1,0 +1,37 @@
+{
+    "name": "wilaak/swoldier",
+    "description": "Swoole micro-framework",
+    "type": "library",
+    "license": "WTFPL",
+    "authors": [
+        {
+            "name": "wilaak",
+            "email": "54738571+wilaak@users.noreply.github.com"
+        }
+    ],
+    "minimum-stability": "stable",
+    "require": {
+        "php": ">=8.3",
+        "swoole/ide-helper": "^6.0",
+        "wilaak/radix-router": "^3.4"
+    },
+    "autoload": {
+        "psr-4": {
+            "Swoldier\\": "src/"
+        }
+    },
+    "homepage": "https://github.com/wilaak/swoldier",
+    "support": {
+        "issues": "https://github.com/wilaak/swoldier/issues",
+        "source": "https://github.com/wilaak/swoldier"
+    },
+    "require-dev": {
+        "php": ">=8.3",
+        "phpunit/phpunit": "^11.0",
+        "friendsofphp/php-cs-fixer": "^3.87",
+        "phpstan/phpstan": "^2.1"
+    },
+    "scripts": {
+        "test": "phpunit --testdox /tests"
+    }
+}
