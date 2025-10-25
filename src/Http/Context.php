@@ -10,12 +10,21 @@ class Context
         public \Swoole\Http\Server $srv,
         public \Swoole\Http\Request $req,
         public \Swoole\Http\Response $res,
+
+        /**
+         * Route parameters extracted from the URI
+         */
         private array $params = [],
-        private \Closure $triggerClose
+
+        /**
+         * List of trusted proxy IP addresses
+         */
+        private array $trustedProxies = ['127.0.0.1', '::1']
     ) {}
 
-    protected bool $connectionClosed = false; 
-
+    /**
+     * Custom attributes storage
+     */
     protected array $attributes = [];
 
     /**
@@ -35,7 +44,7 @@ class Context
     }
 
     /**
-     * Get HTTP method
+     * Get request HTTP method
      */
     public function method(): string
     {
@@ -67,19 +76,29 @@ class Context
     }
 
     /**
-     * Get remote IP address
+     * Get client IP address
      */
-    public function remoteAddress(): string
+    public function ip(): string
     {
         $ip = $this->req->server['remote_addr'];
-        if (isset($this->req->header['x-forwarded-for'])) {
-            $ip = explode(',', $this->req->header['x-forwarded-for'])[0];
+
+        if (!in_array($ip, $this->trustedProxies)) {
+            return $ip;
+        }
+
+        if ($this->header('x-forwarded-for')) {
+            $forwarded = array_map('trim', explode(',', $this->header('x-forwarded-for')));
+            foreach ($forwarded as $candidate) {
+                if (filter_var($candidate, FILTER_VALIDATE_IP)) {
+                    return $candidate;
+                }
+            }
         }
         return $ip;
     }
 
     /**
-     * Get host
+     * Get request host header
      */
     public function host(): ?string
     {
@@ -87,7 +106,7 @@ class Context
     }
 
     /**
-     * Get scheme (http or https)
+     * Get request scheme (http or https)
      */
     public function scheme(): string
     {
@@ -95,117 +114,150 @@ class Context
     }
 
     /**
-     * Get a route parameter
+     * Get route parameter by key or all route parameters if key is null
      */
-    public function param(string $key): ?string
+    public function param(?string $key = null): array|string|null
     {
+        if ($key === null) {
+            return $this->params ?? [];
+        }
         return $this->params[$key] ?? null;
     }
 
     /**
-     * Get all route parameters
+     * Get request query parameter by key or all query parameters if key is null
      */
-    public function params(): array
+    public function query(?string $key): array|string|null
     {
-        return $this->params;
-    }
-
-    public function query(string $key): ?string
-    {
+        if ($key === null) {
+            return $this->req->get ?? [];
+        }
         return $this->req->get[$key] ?? null;
     }
 
-    public function queries(): array
+    /**
+     * Get request form parameter by key or all form parameters if key is null
+     */
+    public function form(?string $key): array|string|null
     {
-        return $this->req->get ?? [];
-    }
-
-    public function postParam(string $key): ?string
-    {
+        if ($key === null) {
+            return $this->req->post ?? [];
+        }
         return $this->req->post[$key] ?? null;
     }
 
-    public function postParams(): array
+    /**
+     * Get request header
+     */
+    public function header(?string $key = null): array|string|null
     {
-        return $this->req->post ?? [];
-    }
-
-    public function header(string $key): ?string
-    {
+        if ($key === null) {
+            return $this->req->header ?? [];
+        }
         return $this->req->header[$key] ?? null;
     }
 
-    public function headers(): array
-    {
-        return $this->req->header ?? [];
-    }
-
+    /**
+     * Set response header
+     */
     public function setHeader(string $key, string $value): void
     {
         $this->res->header($key, $value);
     }
 
-    public function cookie(string $key): ?string
+    /**
+     * Get request cookie by key or all cookies if key is null
+     */
+    public function cookie(?string $key = null): array|string|null
     {
+        if ($key === null) {
+            return $this->req->cookie ?? [];
+        }
         return $this->req->cookie[$key] ?? null;
     }
 
-    public function cookies(): array
-    {
-        return $this->req->cookie ?? [];
-    }
-
+    /**
+     * Set response cookie
+     */
     public function setCookie(string $key, string $value, int $expire = 0, string $path = '/', ?string $domain = null, bool $secure = false, bool $httpOnly = true): void
     {
         $this->res->cookie($key, $value, $expire, $path, $domain, $secure, $httpOnly);
     }
 
+    /**
+     * Delete response cookie
+     */
     public function deleteCookie(string $key, string $path = '/', ?string $domain = null): void
     {
         $this->res->cookie($key, '', time() - 3600, $path, $domain);
     }
 
-    public function uploadedFile(string $key): ?array
+    /**
+     * Get uploaded file by key or all uploaded files if key is null
+     */
+    public function uploadedFile(?string $key = null): ?array
     {
+        if ($key === null) {
+            return $this->req->files ?? [];
+        }
         return $this->req->files[$key] ?? null;
     }
 
-    public function uploadedFiles(): array
-    {
-        return $this->req->files ?? [];
-    }
-
+    /**
+     * Write data to response
+     */
     public function write(string $data): void
     {
         $this->res->write($data);
     }
 
+    /**
+     * End response
+     */
     public function close(): void
     {
         $this->res->end();
     }
 
-    public function json(mixed $data, int $status = 200): void
+    /**
+     * Send JSON response
+     */
+    public function json(mixed $data, ?int $status = null): void
     {
         $this->setHeader('Content-Type', 'application/json; charset=utf-8');
-        $this->status($status);
+        if ($status !== null) {
+            $this->status($status);
+        }
         $this->res->end(json_encode($data));
     }
 
-    public function html(string $html, int $status = 200): void
+    /**
+     * Send HTML response
+     */
+    public function html(string $html, ?int $status = null): void
     {
         $this->setHeader('Content-Type', 'text/html; charset=utf-8');
-        $this->status($status);
+        if ($status !== null) {
+            $this->status($status);
+        }
         $this->res->end($html);
     }
 
-    public function text(string $text, int $status = 200): void
+    /**
+     * Send plain text response
+     */
+    public function text(string $text, ?int $status = null): void
     {
         $this->setHeader('Content-Type', 'text/plain; charset=utf-8');
-        $this->status($status);
+        if ($status !== null) {
+            $this->status($status);
+        }
         $this->res->end($text);
     }
 
+    /**
+     * Send redirect response
+     */
     public function redirect(string $url, int $status = 302): void
     {
         $this->setHeader('Location', $url);
@@ -213,6 +265,9 @@ class Context
         $this->res->end();
     }
 
+    /**
+     * Send file as response
+     */
     public function file(string $baseDir, string $filePath): void
     {
         $baseDir = rtrim(realpath($baseDir), '/') . '/';
@@ -224,6 +279,9 @@ class Context
         $this->text('File not found', 404);
     }
 
+    /**
+     * Send file as download response
+     */
     public function download(string $baseDir, string $filePath, ?string $downloadName = null): void
     {
         $baseDir = rtrim(realpath($baseDir), '/') . '/';
@@ -239,11 +297,17 @@ class Context
         $this->text('File not found', 404);
     }
 
+    /**
+     * Set response status code
+     */
     public function status(int $code): void
     {
         $this->res->status($code);
     }
 
+    /**
+     * Check if the connection is still alive
+     */
     public function connected(): bool
     {
         // TODO: ensure this works with reused connections
