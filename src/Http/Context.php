@@ -195,7 +195,7 @@ class Context
     /**
      * Get uploaded file by key or all uploaded files if key is null
      */
-    public function upload(?string $key = null): ?array
+    public function formFile(?string $key = null): ?array
     {
         if ($key === null) {
             return $this->req->files ?? [];
