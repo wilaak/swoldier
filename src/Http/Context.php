@@ -156,6 +156,14 @@ class Context
     }
 
     /**
+     * Get raw query string
+     */
+    public function getQueryString(): ?string
+    {
+        return $this->req->server['query_string'] ?? null;
+    }
+
+    /**
      * Get request form parameter by key or all form parameters if key is null
      */
     public function getFormParams(?string $key): array|string|null
