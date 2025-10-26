@@ -2,12 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Swoldier\Http;
+namespace Swoldier;
 
-/**
- * HTTP Request and Response Context
- */
-class Context
+class HttpContext
 {
     public function __construct(
         public \Swoole\Http\Server $srv,
@@ -27,9 +24,14 @@ class Context
     }
 
     /**
+     * Response status code
+     */
+    private int $statusCode = 200;
+
+    /**
      * Custom key-value storage for the request context
      */
-    protected array $attributes = [];
+    private array $attributes = [];
 
     /**
      * Set a custom attribute key-value pair
@@ -37,7 +39,7 @@ class Context
      * This can be used by middleware and handlers to store and share data
      * throughout the lifecycle of the request.
      */
-    public function setContextData(string $key, mixed $value): void
+    public function setAttribute(string $key, mixed $value): void
     {
         $this->attributes[$key] = $value;
     }
@@ -47,7 +49,7 @@ class Context
      *
      * Returns null if the attribute does not exist.
      */
-    public function getContextData(?string $key = null): mixed
+    public function getAttribute(?string $key = null): mixed
     {
         if ($key === null) {
             return $this->attributes;
@@ -164,9 +166,9 @@ class Context
     }
 
     /**
-     * Get request form parameter by key or all form parameters if key is null
+     * Get request POST parameter by key or all POST parameters if key is null
      */
-    public function getFormParams(?string $key): array|string|null
+    public function getPostParams(?string $key): array|string|null
     {
         if ($key === null) {
             return $this->req->post ?? [];
@@ -223,7 +225,7 @@ class Context
     /**
      * Get uploaded file by key or all uploaded files if key is null
      */
-    public function getFormFiles(?string $key = null): ?array
+    public function getUploadedFiles(?string $key = null): ?array
     {
         if ($key === null) {
             return $this->req->files ?? [];
@@ -248,9 +250,17 @@ class Context
     }
 
     /**
+     * Terminate the connection immediately
+     */
+    public function terminate(): void
+    {
+        $this->srv->close($this->req->fd);
+    }
+
+    /**
      * Send JSON response
      */
-    public function json(mixed $data, ?int $status = null): void
+    public function sendJson(mixed $data, ?int $status = null): void
     {
         $this->setHeader('Content-Type', 'application/json; charset=utf-8');
         if ($status !== null) {
@@ -262,7 +272,7 @@ class Context
     /**
      * Send HTML response
      */
-    public function html(string $html, ?int $status = null): void
+    public function sendHtml(string $html, ?int $status = null): void
     {
         $this->setHeader('Content-Type', 'text/html; charset=utf-8');
         if ($status !== null) {
@@ -274,7 +284,7 @@ class Context
     /**
      * Send plain text response
      */
-    public function text(string $text, ?int $status = null): void
+    public function sendText(string $text, ?int $status = null): void
     {
         $this->setHeader('Content-Type', 'text/plain; charset=utf-8');
         if ($status !== null) {
@@ -286,7 +296,7 @@ class Context
     /**
      * Send redirect response
      */
-    public function redirect(string $url, int $status = 302): void
+    public function sendRedirect(string $url, int $status = 302): void
     {
         $this->setHeader('Location', $url);
         $this->setStatus($status);
@@ -294,27 +304,45 @@ class Context
     }
 
     /**
-     * Send file as response
+     * Resolve file path within base directory
+     *
+     * This ensures that the resolved file is within the specified base directory
+     * to prevent directory traversal attacks.
      */
-    public function file(string $baseDir, string $filePath): void
+    private function getResolvedFilePath(string $baseDir, string $filePath): ?string
     {
-        $baseDir = \rtrim(\realpath($baseDir), '/') . '/';
+        $resolvedBaseDir = \realpath($baseDir);
+        if ($resolvedBaseDir === false) {
+            return null;
+        }
+        $baseDir = \rtrim($resolvedBaseDir, '/') . '/';
         $fullPath = \realpath("{$baseDir}{$filePath}");
         if ($fullPath && \str_starts_with($fullPath, $baseDir) && \is_file($fullPath)) {
+            return $fullPath;
+        }
+        return null;
+    }
+
+    /**
+     * Send file as response
+     */
+    public function sendFile(string $baseDir, string $filePath): void
+    {
+        $fullPath = $this->getResolvedFilePath($baseDir, $filePath);
+        if ($fullPath) {
             $this->res->sendfile($fullPath);
             return;
         }
-        $this->text('File not found', 404);
+        $this->sendText('File not found', 404);
     }
 
     /**
      * Send file as download response
      */
-    public function download(string $baseDir, string $filePath, ?string $downloadName = null): void
+    public function sendDownload(string $baseDir, string $filePath, ?string $downloadName = null): void
     {
-        $baseDir = \rtrim(\realpath($baseDir), '/') . '/';
-        $fullPath = \realpath("{$baseDir}{$filePath}");
-        if ($fullPath && \str_starts_with($fullPath, $baseDir) && \is_file($fullPath)) {
+        $fullPath = $this->getResolvedFilePath($baseDir, $filePath);
+        if ($fullPath) {
             $fileName = \rawurlencode($downloadName ?? \basename($filePath));
             $this->setHeader('Content-Type', 'application/octet-stream');
             $this->setHeader('Content-Transfer-Encoding', 'binary');
@@ -322,7 +350,7 @@ class Context
             $this->res->sendfile($fullPath);
             return;
         }
-        $this->text('File not found', 404);
+        $this->sendText('File not found', 404);
     }
 
     /**
@@ -331,6 +359,15 @@ class Context
     public function setStatus(int $code): void
     {
         $this->res->status($code);
+        $this->statusCode = $code;
+    }
+
+    /**
+     * Get response status code
+     */
+    public function getStatus(): int
+    {
+        return $this->statusCode;
     }
 
     /**
