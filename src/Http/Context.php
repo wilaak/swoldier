@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Swoldier\Http;
 
+/**
+ * HTTP Request and Response Context
+ */
 class Context
 {
     public function __construct(
@@ -17,36 +20,45 @@ class Context
         private array $params = [],
 
         /**
-         * List of trusted proxy IP addresses
+         * List of trusted proxy IP addresses when determining client IP address
          */
         private array $trustedProxies = ['127.0.0.1', '::1']
-    ) {}
+    ) {
+    }
 
     /**
-     * Custom attributes storage
+     * Custom key-value storage for the request context
      */
     protected array $attributes = [];
 
     /**
-     * Set a custom attribute
+     * Set a custom attribute key-value pair
+     *
+     * This can be used by middleware and handlers to store and share data
+     * throughout the lifecycle of the request.
      */
-    public function set(string $key, mixed $value): void
+    public function setContextData(string $key, mixed $value): void
     {
         $this->attributes[$key] = $value;
     }
 
     /**
-     * Get a custom attribute
+     * Get a custom attribute value by key or all attributes if key is null
+     *
+     * Returns null if the attribute does not exist.
      */
-    public function get(string $key, mixed $default = null): mixed
+    public function getContextData(?string $key = null): mixed
     {
-        return $this->attributes[$key] ?? $default;
+        if ($key === null) {
+            return $this->attributes;
+        }
+        return $this->attributes[$key] ?? null;
     }
 
     /**
      * Get request HTTP method
      */
-    public function method(): string
+    public function getMethod(): string
     {
         return $this->req->server['request_method'];
     }
@@ -54,7 +66,7 @@ class Context
     /**
      * Get full request URI
      */
-    public function uri(): string
+    public function getUri(): string
     {
         return $this->req->server['request_uri'];
     }
@@ -62,15 +74,15 @@ class Context
     /**
      * Get request path (URI without query string)
      */
-    public function path(): string
+    public function getPath(): string
     {
-        return strtok($this->uri(), '?');
+        return \strtok($this->getUri(), '?');
     }
 
     /**
-     * Get request body
+     * Get full request body as string
      */
-    public function body(): string
+    public function getBody(): string
     {
         return $this->req->rawContent() ?: '';
     }
@@ -78,18 +90,18 @@ class Context
     /**
      * Get client IP address
      */
-    public function ip(): string
+    public function getIp(): string
     {
         $ip = $this->req->server['remote_addr'];
 
-        if (!in_array($ip, $this->trustedProxies)) {
+        if (!\in_array($ip, $this->trustedProxies)) {
             return $ip;
         }
 
-        if ($this->header('x-forwarded-for')) {
-            $forwarded = array_map('trim', explode(',', $this->header('x-forwarded-for')));
+        if ($this->getHeaders('x-forwarded-for')) {
+            $forwarded = \array_map('trim', \explode(',', $this->getHeaders('x-forwarded-for')));
             foreach ($forwarded as $candidate) {
-                if (filter_var($candidate, FILTER_VALIDATE_IP)) {
+                if (\filter_var($candidate, FILTER_VALIDATE_IP)) {
                     return $candidate;
                 }
             }
@@ -98,9 +110,9 @@ class Context
     }
 
     /**
-     * Get request host header
+     * Get request host header (e.g., example.com)
      */
-    public function host(): ?string
+    public function getHost(): ?string
     {
         return $this->req->header['host'] ?? null;
     }
@@ -108,15 +120,23 @@ class Context
     /**
      * Get request scheme (http or https)
      */
-    public function scheme(): string
+    public function getScheme(): string
     {
         return ($this->req->server['https'] ?? 'off') === 'on' ? 'https' : 'http';
     }
 
     /**
+     * Get request protocol (e.g., HTTP/1.1)
+     */
+    public function getProtocol(): string
+    {
+        return $this->req->server['server_protocol'] ?? 'HTTP/1.1';
+    }
+
+    /**
      * Get route parameter by key or all route parameters if key is null
      */
-    public function param(?string $key = null): array|string|null
+    public function getRouteParams(?string $key = null): array|string|null
     {
         if ($key === null) {
             return $this->params ?? [];
@@ -127,7 +147,7 @@ class Context
     /**
      * Get request query parameter by key or all query parameters if key is null
      */
-    public function query(?string $key): array|string|null
+    public function getQueryParams(?string $key): array|string|null
     {
         if ($key === null) {
             return $this->req->get ?? [];
@@ -138,7 +158,7 @@ class Context
     /**
      * Get request form parameter by key or all form parameters if key is null
      */
-    public function form(?string $key): array|string|null
+    public function getFormParams(?string $key): array|string|null
     {
         if ($key === null) {
             return $this->req->post ?? [];
@@ -147,9 +167,9 @@ class Context
     }
 
     /**
-     * Get request header
+     * Get request header by key or all headers if key is null
      */
-    public function header(?string $key = null): array|string|null
+    public function getHeaders(?string $key = null): array|string|null
     {
         if ($key === null) {
             return $this->req->header ?? [];
@@ -168,7 +188,7 @@ class Context
     /**
      * Get request cookie by key or all cookies if key is null
      */
-    public function cookie(?string $key = null): array|string|null
+    public function getCookies(?string $key = null): array|string|null
     {
         if ($key === null) {
             return $this->req->cookie ?? [];
@@ -189,13 +209,13 @@ class Context
      */
     public function deleteCookie(string $key, string $path = '/', ?string $domain = null): void
     {
-        $this->res->cookie($key, '', time() - 3600, $path, $domain);
+        $this->res->cookie($key, '', \time() - 3600, $path, $domain);
     }
 
     /**
      * Get uploaded file by key or all uploaded files if key is null
      */
-    public function formFile(?string $key = null): ?array
+    public function getFormFiles(?string $key = null): ?array
     {
         if ($key === null) {
             return $this->req->files ?? [];
@@ -204,7 +224,7 @@ class Context
     }
 
     /**
-     * Write data to response
+     * Write data to the response
      */
     public function write(string $data): void
     {
@@ -226,9 +246,9 @@ class Context
     {
         $this->setHeader('Content-Type', 'application/json; charset=utf-8');
         if ($status !== null) {
-            $this->status($status);
+            $this->setStatus($status);
         }
-        $this->res->end(json_encode($data));
+        $this->res->end(\json_encode($data));
     }
 
     /**
@@ -238,7 +258,7 @@ class Context
     {
         $this->setHeader('Content-Type', 'text/html; charset=utf-8');
         if ($status !== null) {
-            $this->status($status);
+            $this->setStatus($status);
         }
         $this->res->end($html);
     }
@@ -250,7 +270,7 @@ class Context
     {
         $this->setHeader('Content-Type', 'text/plain; charset=utf-8');
         if ($status !== null) {
-            $this->status($status);
+            $this->setStatus($status);
         }
         $this->res->end($text);
     }
@@ -261,7 +281,7 @@ class Context
     public function redirect(string $url, int $status = 302): void
     {
         $this->setHeader('Location', $url);
-        $this->status($status);
+        $this->setStatus($status);
         $this->res->end();
     }
 
@@ -270,9 +290,9 @@ class Context
      */
     public function file(string $baseDir, string $filePath): void
     {
-        $baseDir = rtrim(realpath($baseDir), '/') . '/';
-        $fullPath = realpath("{$baseDir}{$filePath}");
-        if ($fullPath && str_starts_with($fullPath, $baseDir) && is_file($fullPath)) {
+        $baseDir = \rtrim(\realpath($baseDir), '/') . '/';
+        $fullPath = \realpath("{$baseDir}{$filePath}");
+        if ($fullPath && \str_starts_with($fullPath, $baseDir) && \is_file($fullPath)) {
             $this->res->sendfile($fullPath);
             return;
         }
@@ -284,10 +304,10 @@ class Context
      */
     public function download(string $baseDir, string $filePath, ?string $downloadName = null): void
     {
-        $baseDir = rtrim(realpath($baseDir), '/') . '/';
-        $fullPath = realpath("{$baseDir}{$filePath}");
-        if ($fullPath && str_starts_with($fullPath, $baseDir) && is_file($fullPath)) {
-            $fileName = rawurlencode($downloadName ?? basename($filePath));
+        $baseDir = \rtrim(\realpath($baseDir), '/') . '/';
+        $fullPath = \realpath("{$baseDir}{$filePath}");
+        if ($fullPath && \str_starts_with($fullPath, $baseDir) && \is_file($fullPath)) {
+            $fileName = \rawurlencode($downloadName ?? \basename($filePath));
             $this->setHeader('Content-Type', 'application/octet-stream');
             $this->setHeader('Content-Transfer-Encoding', 'binary');
             $this->setHeader('Content-Disposition', "attachment; filename=\"{$fileName}\"");
@@ -300,7 +320,7 @@ class Context
     /**
      * Set response status code
      */
-    public function status(int $code): void
+    public function setStatus(int $code): void
     {
         $this->res->status($code);
     }
@@ -308,7 +328,7 @@ class Context
     /**
      * Check if the connection is still alive
      */
-    public function connected(): bool
+    public function isConnected(): bool
     {
         // TODO: ensure this works with reused connections
         // look into using swoole onClose event
