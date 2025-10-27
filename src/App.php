@@ -4,65 +4,146 @@ declare(strict_types=1);
 
 namespace Swoldier;
 
+use Psr\Log\LoggerInterface;
+use Swoldier\Enum\Http\HttpMethod;
+use Swoldier\Http\HttpContext;
+use Swoldier\Plugin\BasePlugin;
+use Swoole\Coroutine;
 use Swoole\Runtime;
 use Swoole\Http\{Server, Request, Response};
 use Wilaak\Http\RadixRouter;
 
+/**
+ * Swoldier micro-framework
+ * 
+ * @license WTFPL-2
+ * @link https://github.com/wilaak/swoldier
+ */
 class App
 {
-    private array $routes = [];
+    /**
+     * Current group middleware stack
+     */
     private array $middleware = [];
+
+    /**
+     * Global middleware stack
+     */
     private array $globalMiddleware = [];
+
+    /**
+     * Underlying radix tree router implementation
+     */
     private RadixRouter $router;
 
+    /**
+     * Registered plugins
+     */
+    private array $plugins = [];
+
+    /**
+     * @param LoggerInterface $logger Logger instance for the application
+     * @param int $port Server listening port
+     * @param string $host Server listening host
+     * @param int $workers Number of worker processes
+     * @param array $trustedProxies List of trusted proxy IP addresses when determining client IP address
+     */
     public function __construct(
-        /**
-         * Server listening port
-         */
+        private LoggerInterface $logger,
         public int $port = 8080,
-
-        /**
-         * Server listening host
-         */
         public string $host = '127.0.0.1',
-
-        /**
-         * Number of worker processes
-         */
         public int $workers = 1,
-
-        /**
-         * List of trusted proxy IP addresses when determining client IP address
-         */
         public array $trustedProxies = ['127.0.0.1', '::1'],
     ) {
         $this->router = new RadixRouter();
     }
 
     /**
+     * Register a plugin with the application
+     * 
+     * @param BasePlugin $plugin Plugin instance to register
+     */
+    public function registerPlugin(BasePlugin $plugin): void
+    {
+        $this->plugins[] = $plugin;
+    }
+
+    /**
      * Add a route with specified HTTP methods, pattern and handler
      *
-     * @param string|array $methods HTTP method or list of methods
+     * @param HttpMethod|string|array $methods HTTP method or list of methods
      * @param string $pattern Route pattern (e.g. /users/:id)
      * @param callable $handler Function to handle the request
      */
-    public function match(string|array $methods, string $pattern, callable $handler)
+    public function match(HttpMethod|string|array $methods, string $pattern, callable $handler)
     {
         $handler = $this->buildMiddlewarePipeline($this->middleware, $handler);
-        $this->routes[] = [
-            'method' => $methods,
-            'pattern' => $pattern,
-            'handler' => $handler,
-        ];
+        $method = $methods instanceof HttpMethod
+            ? $methods->value
+            : (is_array($methods) ? $methods : [$methods]);
+        $this->router->add($method, $pattern, $handler);
+    }
+
+    /**
+     * Add a route for GET requests
+     */
+    public function get(string $pattern, callable $handler)
+    {
+        $this->match('GET', $pattern, $handler);
+    }
+
+    /**
+     * Add a route for POST requests
+     */
+    public function post(string $pattern, callable $handler)
+    {
+        $this->match('POST', $pattern, $handler);
+    }
+
+    /**
+     * Add a route for PUT requests
+     */
+    public function put(string $pattern, callable $handler)
+    {
+        $this->match('PUT', $pattern, $handler);
+    }
+
+    /**
+     * Add a route for PATCH requests
+     */
+    public function patch(string $pattern, callable $handler)
+    {
+        $this->match('PATCH', $pattern, $handler);
+    }
+
+    /**
+     * Add a route for DELETE requests
+     */
+    public function delete(string $pattern, callable $handler)
+    {
+        $this->match('DELETE', $pattern, $handler);
+    }
+
+    /**
+     * Add a route for HEAD requests
+     */
+    public function head(string $pattern, callable $handler)
+    {
+        $this->match('HEAD', $pattern, $handler);
+    }
+
+    /**
+     * Add a route for OPTIONS requests
+     */
+    public function options(string $pattern, callable $handler)
+    {
+        $this->match('OPTIONS', $pattern, $handler);
     }
 
     /**
      * Add a route for all HTTP methods
-     *
-     * @param string $pattern Route pattern (e.g. /users/:id)
-     * @param callable $handler Function to handle the request
      */
-    public function any(string $pattern, callable $handler)
+    public function all(string $pattern, callable $handler)
     {
         $this->match($this->router->allowedMethods, $pattern, $handler);
     }
@@ -73,7 +154,6 @@ class App
     public function groupMiddleware(callable ...$middleware): self
     {
         $group = clone $this;
-        $group->routes = &$this->routes;
         $group->middleware = [...$this->middleware, ...$middleware];
         return $group;
     }
@@ -109,7 +189,6 @@ class App
     {
         Runtime::enableCoroutine();
 
-        $router = $this->router;
         $server = new Server($this->host, $this->port);
 
         $server->set([
@@ -118,26 +197,21 @@ class App
             'open_cpu_affinity' => true,
         ]);
 
-        foreach ($this->routes as $route) {
-            $router->add(
-                $route['method'],
-                $route['pattern'],
-                $route['handler']
-            );
-        }
-
         $globalMiddlewarePipeline = $this->buildMiddlewarePipeline(
             $this->globalMiddleware,
-            fn (HttpContext $ctx) => $this->handleRequest($ctx)
+            fn(HttpContext $ctx) => $this->handleRequest($ctx)
         );
 
-        $server->on('Request', function (Request $req, Response $res) use ($server, $router, $globalMiddlewarePipeline) {
+        $server->on('Request', function (Request $req, Response $res) use ($server, $globalMiddlewarePipeline) {
+
+            Coroutine::getContext()['request_id'] = uniqid();
+
             $method = $req->server['request_method'];
 
             $path = \strtok($req->server['request_uri'], '?');
             $decodedPath = \rawurldecode($path);
 
-            $result = $router->lookup($method, $decodedPath);
+            $result = $this->router->lookup($method, $decodedPath);
 
             $ctx = new HttpContext(
                 $server,
@@ -147,19 +221,47 @@ class App
                 $this->trustedProxies
             );
 
+            $this->logger->info("{method} {path} {ip}", [
+                'method' => $method,
+                'path' => $decodedPath,
+                'ip' => $ctx->getIp(),
+            ]);
+
             try {
                 $ctx->setAttribute('_result', $result);
-                $ctx->setAttribute('_router', $router);
+                $ctx->setAttribute('_router', $this->router);
                 $globalMiddlewarePipeline($ctx);
             } catch (\Throwable $e) {
                 $res->status(500);
                 $res->end("Internal Server Error");
+                $this->logger->error("Internal Server Error: {error}", [
+                    'error' => $e->getMessage(),
+                ]);
             }
         });
 
         $server->on('Start', function () use ($callback, $server) {
+            foreach ($this->plugins as $plugin) {
+                $plugin->register($this);
+            }
+            $host = $server->host;
+            $port = $server->port;
+            $this->logger->info("Server started on {$host}:{$port}, Workers {$this->workers}");
             if ($callback) {
-                $callback($server);
+                $callback();
+            }
+        });
+
+        $server->on('WorkerStart', function (Server $server, int $workerId) {
+            foreach ($this->plugins as $plugin) {
+                $plugin->boot($this);
+            }
+        });
+
+        $server->on('WorkerStop', function (Server $server, int $workerId) {
+            $this->logger->info("Worker {$workerId} stopping.");
+            foreach ($this->plugins as $plugin) {
+                $plugin->shutdown($this);
             }
         });
 

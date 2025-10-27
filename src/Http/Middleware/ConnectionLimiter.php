@@ -2,17 +2,22 @@
 
 declare(strict_types=1);
 
-namespace Swoldier\Middleware;
+namespace Swoldier\Http\Middleware;
 
 use Psr\Log\LoggerInterface;
-use Swoldier\HttpContext;
-use Swoole\{Table, Atomic};
+use Swoldier\Http\HttpContext;
+use Swoole\{Table, Atomic, Timer};
 
 class ConnectionLimiter
 {
     private Table $table;
     private Atomic $totalConnections;
 
+    /**
+     * @param int $maxConnections Maximum total concurrent connections allowed
+     * @param int $maxConnectionsPerIp Maximum concurrent connections allowed per IP
+     * @param LoggerInterface|null $logger Optional logger for logging limit breaches
+     */
     public function __construct(
         private int $maxConnections = 1000,
         private int $maxConnectionsPerIp = 1,
@@ -27,8 +32,8 @@ class ConnectionLimiter
 
     public function __invoke(HttpContext $ctx, callable $next)
     {
-        $maxPerIp = $this->maxConnectionsPerIp;
         $maxTotal = $this->maxConnections;
+        $maxPerIp = $this->maxConnectionsPerIp;
         $table = $this->table;
         $atomic = $this->totalConnections;
 
@@ -37,8 +42,8 @@ class ConnectionLimiter
         $totalConnections = $atomic->get();
 
         if ($totalConnections >= $maxTotal) {
-            $ctx->sendJson(['error' => 'Too many total connections'], 429);
-            $this->logger?->warning("Total connection limit exceeded: {$totalConnections} connections");
+            $ctx->terminate();
+            $this->logger?->error("Total connection limit exceeded: {$totalConnections} connections");
             return;
         }
 

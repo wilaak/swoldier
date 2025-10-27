@@ -2,23 +2,24 @@
 
 declare(strict_types=1);
 
-namespace Swoldier\Middleware;
+namespace Swoldier\Http\Middleware;
 
 use Psr\Log\LoggerInterface;
-use Swoldier\HttpContext;
+use Swoldier\Http\HttpContext;
+use Swoole\Table;
 
 class RateLimiter
 {
-    private \Swoole\Table $table;
+    private Table $table;
 
     public function __construct(
         private int $maxRequestsPerIp = 100,
         private int $timeWindow = 60,
         private ?LoggerInterface $logger = null
     ) {
-        $table = new \Swoole\Table(1024);
-        $table->column('requests', \Swoole\Table::TYPE_INT, 4);
-        $table->column('timestamp', \Swoole\Table::TYPE_INT, 8);
+        $table = new Table(1024);
+        $table->column('requests', Table::TYPE_INT, 4);
+        $table->column('timestamp', Table::TYPE_INT, 8);
         $table->create();
         $this->table = $table;
     }

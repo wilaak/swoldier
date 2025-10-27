@@ -2,20 +2,25 @@
 
 require __DIR__ . '/vendor/autoload.php';
 
-use Swoldier\{App, HttpContext, SimpleLogger};
-use Swoldier\Middleware\{ConnectionLimiter, RateLimiter};
+use Swoldier\{App, Http\HttpContext, ContextAwareLogger};
+use Swoldier\Http\Middleware\{ConnectionLimiter, RateLimiter};
+
+$logger = new ContextAwareLogger(
+    logFilePath: __DIR__ . '/server.log',
+);
 
 $app = new App(
     host: '0.0.0.0',
     port: 8080,
-    workers: 40,
+    workers: 1,
+    logger: $logger,
 );
 
-$logger = new SimpleLogger(
-    logFilePath: __DIR__ . '/server.log',
-);
+$app->registerPlugin(new Swoldier\Plugin\Prometheus(
+    $logger->withSettings('prometheus')
+));
 
-$limited = $app->groupMiddleware(
+$app->globalMiddleware(
     new ConnectionLimiter(
         maxConnections: 500,
         maxConnectionsPerIp: 1,
@@ -28,32 +33,36 @@ $limited = $app->groupMiddleware(
     )
 );
 
-$limited->match('GET', '/limited', function (HttpContext $ctx) {
+$test = $app->groupMiddleware(
+    function (HttpContext $ctx, callable $next) use ($logger) {
+        $logger->info("Handling request for {path} from {ip}", [
+            'path' => $ctx->getPath(),
+            'ip' => $ctx->getIp(),
+        ]);
+        $next($ctx);
+    }
+);
+
+$test->get('/test', function (HttpContext $ctx) use ($logger) {
+    $ctx->sendJson($ctx->getAttribute('_router')->list());
+});
+
+$app->get('/limited', function (HttpContext $ctx) use ($logger) {
     $ctx->write("This is a rate and connection limited endpoint.");
 });
 
-$app->globalMiddleware(function (HttpContext $ctx, callable $next) use ($logger) {
-    $logger->info("Incoming request: {$ctx->getMethod()} {$ctx->getPath()} from {$ctx->getIp()}");
-    $next($ctx);
-});
-
-$app->match('GET', '/hello/:world?', function (HttpContext $ctx) {
+$app->get('/hello/:world?', function (HttpContext $ctx) {
     $name = $ctx->getRouteParams('world') ?? 'World';
     $ctx->write("Hello, {$name}!");
 });
 
-$app->match('GET', '/stats', function (HttpContext $ctx) {
+$app->get('/stats', function (HttpContext $ctx) {
     $stats = [
         'uptime' => time() - $_SERVER['REQUEST_TIME'],
         'memory_usage' => memory_get_usage(),
         'memory_peak_usage' => memory_get_peak_usage(),
     ];
-    $serverStats = $ctx->srv->stats();
-    $ctx->sendJson($stats + $serverStats);
+    $ctx->sendJson($stats);
 });
 
-$app->run(function ($server) use ($logger) {
-    $logger->info("Server started on {$server->host}:{$server->port}");
-    $workerCount = $server->setting['worker_num'] ?? 1;
-    $logger->info("Worker processes: {$workerCount}");
-});
+$app->run();

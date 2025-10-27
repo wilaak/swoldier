@@ -2,14 +2,17 @@
 
 declare(strict_types=1);
 
-namespace Swoldier;
+namespace Swoldier\Http;
 
+/**
+ * HTTP request and response context
+ */
 class HttpContext
 {
     public function __construct(
-        public \Swoole\Http\Server $srv,
-        public \Swoole\Http\Request $req,
-        public \Swoole\Http\Response $res,
+        private \Swoole\Http\Server $srv,
+        private \Swoole\Http\Request $req,
+        private \Swoole\Http\Response $res,
 
         /**
          * Route parameters extracted from the URI

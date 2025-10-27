@@ -4,20 +4,45 @@ declare(strict_types=1);
 
 namespace Swoldier\Plugin;
 
-use Swoldier\{App, HttpContext};
+use Swoldier\{App, Http\HttpContext};
 
-class Prometheus implements PluginInterface
+class Prometheus extends BasePlugin
 {
-    public function register(App $app): void
-    {
-        $app->match('GET', '/metrics', function (HttpContext $ctx) {
-            $ctx->sendText($this->getMetrics());
-        });
+    private static ?\Swoole\Table $table = null;
+
+    public function __construct(
+        private \Psr\Log\LoggerInterface $logger
+    ) {
+
     }
 
-    private function getMetrics(): string
+    public function register(App $app): void
     {
-        // Gather and return Prometheus metrics
-        return '';
+        $this->logger->info("Initializing Prometheus plugin");
+        if (self::$table === null) {
+            $table = new \Swoole\Table(1024);
+            $table->column('requests', \Swoole\Table::TYPE_INT, 8);
+            $table->create();
+            self::$table = $table;
+        }
+    }
+
+    public function boot(App $app): void
+    {
+        // Increment request count for every request (middleware or route)
+        $app->globalMiddleware(function (HttpContext $ctx, callable $next) {
+            $ip = $ctx->getIp();
+            // You can track per-IP or global stats
+            self::$table->incr($ip, 'requests');
+            $next($ctx);
+        });
+
+        $app->match('GET', '/metrics', function (HttpContext $ctx) {
+            $lines = [];
+            foreach (self::$table as $ip => $row) {
+                $lines[] = "requests_total{ip=\"$ip\"} " . $row['requests'];
+            }
+            $ctx->sendText(implode("\n", $lines));
+        });
     }
 }
