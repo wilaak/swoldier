@@ -9,9 +9,9 @@ use Psr\Log\LogLevel;
 use Swoole\Timer;
 
 /**
- * Swoldier context aware logger with batching for better performance.
+ * Simple batch logger that buffers log entries and flushes them periodically for performance.
  */
-class ContextAwareLogger implements LoggerInterface
+class BatchLogger implements LoggerInterface
 {
     /**
      * @var array $batch Batched log entries to be flushed
@@ -24,6 +24,7 @@ class ContextAwareLogger implements LoggerInterface
     private ?int $flushTimerId = null;
 
     /**
+     * @param string $channel Log channel name
      * @param int $flushDelayMs Delay in milliseconds before flushing the log batch
      * @param bool $useColors Whether to use colored output in stdout
      * @param string $stdoutLogLevel Minimum log level for stdout
@@ -37,14 +38,15 @@ class ContextAwareLogger implements LoggerInterface
         private string $stdoutLogLevel = LogLevel::INFO,
         private ?string $logFilePath = null,
         private string $fileLogLevel = LogLevel::INFO,
-    ) {}
+    ) {
+    }
 
     /**
      * Create a new logger with modified settings.
-     * 
-     * @param string $channel
-     * @param string|null $stdoutLogLevel
-     * @param string|null $fileLogLevel
+     *
+     * @param string $channel Log channel name
+     * @param string|null $stdoutLogLevel Minimum log level for stdout
+     * @param string|null $fileLogLevel Minimum log level for file logging
      */
     public function withSettings(
         string $channel = 'app',
@@ -160,10 +162,22 @@ class ContextAwareLogger implements LoggerInterface
      */
     private function formatStdout(string $level, string $message, ?bool $useColors = null): string
     {
-        $channelLevel = $this->channel . '.' . strtoupper($level);
+        $timestamp = \date('Y-m-d H:i:s');
+        // Center the level string to 9 characters
+        $levelRaw = \strtoupper($level);
+        $levelLen = \strlen($levelRaw);
+        $padTotal = 9 - $levelLen;
+        $padLeft = (int)\floor($padTotal / 2);
+        $padRight = $padTotal - $padLeft;
+        $levelStr = \str_repeat(' ', $padLeft) . $levelRaw . \str_repeat(' ', $padRight);
+        $channel = $this->channel;
+
+        $baseFormat = '[%s] [%s] [%s] %s';
+
         if (!$useColors) {
-            return \sprintf('[%s] %s', $channelLevel, $message);
+            return \sprintf($baseFormat, $timestamp, $levelStr, $channel, $message);
         }
+
         $colorMap = [
             LogLevel::EMERGENCY => "\033[1;41m", // white on red
             LogLevel::ALERT     => "\033[1;35m", // magenta
@@ -176,9 +190,20 @@ class ContextAwareLogger implements LoggerInterface
         ];
         $reset = "\033[0m";
         $color = $colorMap[$level] ?? "";
-        return \sprintf('%s %s[%s]%s %s', date('Y-m-d H:i:s'), $color, $channelLevel, $reset, $message);
-    }
+        $channelColor = "\033[1;34m";
 
+        return \sprintf(
+            '[%s] %s[%s]%s %s[%s]%s %s',
+            $timestamp,
+            $color,
+            $levelStr,
+            $reset,
+            $channelColor,
+            $channel,
+            $reset,
+            $message
+        );
+    }
 
     /**
      * Compare log levels for thresholding (returns >=0 if $level >= $threshold)
@@ -200,7 +225,7 @@ class ContextAwareLogger implements LoggerInterface
 
     /**
      * Interpolate context values into the message placeholders.
-     * 
+     *
      * Example: "User {username} created" with ['username' => 'alice']
      */
     private function interpolate(string $message, array $context): string

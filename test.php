@@ -2,62 +2,45 @@
 
 require __DIR__ . '/vendor/autoload.php';
 
-use Swoldier\{
-    App,
-    Http\Context,
-    ContextAwareLogger
-};
+use Swoldier\{App, Http\Context, BatchLogger};
+use Swoldier\Http\Middleware\{ConnectionLimiter, RateLimiter, RequestLogger};
 
-use Swoldier\Http\Middleware\{ConnectionLimiter, RateLimiter};
+App::spawn(function (App $app) {
 
-$logger = new ContextAwareLogger(
-    logFilePath: __DIR__ . '/server.log',
-);
+    $logger = new BatchLogger();
 
-$app = new App(
-    host: '0.0.0.0',
-    port: 8080,
-    workers: 1,
-    logger: $logger,
-);
+    $app->use(
+        new RequestLogger(logger: $logger),
+        new ConnectionLimiter(
+            maxConnections: 100,
+            maxConnectionsPerIp: 5,
+            logger: $logger,
+        )
+    );
 
-$app->plugin(new Swoldier\Plugin\Prometheus(
-    $logger->withSettings('prometheus')
-));
+    $app->get('/ping', function (Context $ctx) use ($logger) {
+        $ctx->text('pong');
+        $logger->info("Handled /ping request from {ip}", ['ip' => $ctx->getIp()]);
+    });
 
-$app->use(
-    new ConnectionLimiter(
-        maxConnections: 500,
-        maxConnectionsPerIp: 1,
-        logger: $logger,
-    ),
-    new RateLimiter(
-        maxRequestsPerIp: 100,
-        timeWindow: 60,
-        logger: $logger,
-    )
-);
 
-$test->get('/test', function (Context $ctx) {
-    $ctx->sendJson($ctx->getAttribute('_router')->list());
-});
+    $app->get('/hello/:world?', function (Context $ctx) {
+        $name = $ctx->getRouteParams('world') ?? 'World';
+        $ctx->text("Hello, {$name}!");
+    });
 
-$app->get('/limited', function (Context $ctx) {
-    $ctx->write("This is a rate and connection limited endpoint.");
-});
+    $api = $app->group(
+        new RateLimiter(
+            maxRequestsPerIp: 100,
+            timeWindow: 60,
+            logger: $logger,
+        )
+    );
 
-$app->get('/hello/:world?', function (Context $ctx) {
-    $name = $ctx->getRouteParams('world') ?? 'World';
-    $ctx->write("Hello, {$name}!");
-});
-
-$app->get('/stats', function (Context $ctx) {
-    $stats = [
-        'uptime' => time() - $_SERVER['REQUEST_TIME'],
-        'memory_usage' => memory_get_usage(),
-        'memory_peak_usage' => memory_get_peak_usage(),
-    ];
-    $ctx->sendJson($stats);
-});
-
-$app->run();
+    $api->get('/data', function (Context $ctx) {
+        $ctx->json(['data' => 'This is some rate limited data.']);
+    });
+}, [
+    'port' => 8080,
+    'host' => '0.0.0.0'
+]);

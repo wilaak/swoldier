@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Swoldier\Http;
 
+use RuntimeException;
+
 /**
  * HTTP request and response context
  */
@@ -23,13 +25,17 @@ class Context
          * List of trusted proxy IP addresses when determining client IP address
          */
         private array $trustedProxies = ['127.0.0.1', '::1']
-    ) {
-    }
+    ) {}
 
     /**
      * Response status code
      */
     private int $statusCode = 200;
+
+    /**
+     * Flag indicating if headers have been sent
+     */
+    private bool $headersSent = false;
 
     /**
      * Custom key-value storage for the request context
@@ -195,6 +201,9 @@ class Context
      */
     public function setHeader(string $key, string $value): void
     {
+        if ($this->headersSent) {
+            throw new RuntimeException('Headers already sent.');
+        }
         $this->res->header($key, $value);
     }
 
@@ -214,6 +223,9 @@ class Context
      */
     public function setCookie(string $key, string $value, int $expire = 0, string $path = '/', ?string $domain = null, bool $secure = false, bool $httpOnly = true): void
     {
+        if ($this->headersSent) {
+            throw new RuntimeException('Headers already sent.');
+        }
         $this->res->cookie($key, $value, $expire, $path, $domain, $secure, $httpOnly);
     }
 
@@ -241,19 +253,21 @@ class Context
      */
     public function write(string $data): void
     {
+        $this->headersSent = true;
         $this->res->write($data);
     }
 
     /**
      * End response
      */
-    public function close(): void
+    public function end(?string $data = null): void
     {
-        $this->res->end();
+        $this->headersSent = true;
+        $this->res->end($data);
     }
 
     /**
-     * Close the connection without sending a response
+     * Close connection
      */
     public function abort(): void
     {
@@ -263,86 +277,69 @@ class Context
     /**
      * Send JSON response
      */
-    public function sendJson(mixed $data, ?int $status = null): void
+    public function json(mixed $data, ?int $status = null): void
     {
         $this->setHeader('Content-Type', 'application/json; charset=utf-8');
         if ($status !== null) {
             $this->setStatus($status);
         }
-        $this->res->end(\json_encode($data));
+        $this->end(\json_encode($data));
     }
 
     /**
      * Send HTML response
      */
-    public function sendHtml(string $html, ?int $status = null): void
+    public function html(string $html, ?int $status = null): void
     {
         $this->setHeader('Content-Type', 'text/html; charset=utf-8');
         if ($status !== null) {
             $this->setStatus($status);
         }
-        $this->res->end($html);
+        $this->end($html);
     }
 
     /**
      * Send plain text response
      */
-    public function sendText(string $text, ?int $status = null): void
+    public function text(string $text, ?int $status = null): void
     {
         $this->setHeader('Content-Type', 'text/plain; charset=utf-8');
         if ($status !== null) {
             $this->setStatus($status);
         }
-        $this->res->end($text);
+        $this->end($text);
     }
 
     /**
      * Send redirect response
      */
-    public function sendRedirect(string $url, int $status = 302): void
+    public function redirect(string $url, int $status = 302): void
     {
         $this->setHeader('Location', $url);
         $this->setStatus($status);
-        $this->res->end();
-    }
-
-    /**
-     * Resolve file path within base directory
-     *
-     * This ensures that the resolved file is within the specified base directory
-     * to prevent directory traversal attacks.
-     */
-    private function getResolvedFilePath(string $baseDir, string $filePath): ?string
-    {
-        $resolvedBaseDir = \realpath($baseDir);
-        if ($resolvedBaseDir === false) {
-            return null;
-        }
-        $baseDir = \rtrim($resolvedBaseDir, '/') . '/';
-        $fullPath = \realpath("{$baseDir}{$filePath}");
-        if ($fullPath && \str_starts_with($fullPath, $baseDir) && \is_file($fullPath)) {
-            return $fullPath;
-        }
-        return null;
+        $this->end();
     }
 
     /**
      * Send file as response
      */
-    public function sendFile(string $baseDir, string $filePath): void
+    public function file(string $baseDir, string $filePath): void
     {
+        if ($this->headersSent) {
+            throw new RuntimeException('Headers already sent.');
+        }
         $fullPath = $this->getResolvedFilePath($baseDir, $filePath);
         if ($fullPath) {
             $this->res->sendfile($fullPath);
             return;
         }
-        $this->sendText('File not found', 404);
+        $this->text('File not found', 404);
     }
 
     /**
      * Send file as download response
      */
-    public function sendDownload(string $baseDir, string $filePath, ?string $downloadName = null): void
+    public function download(string $baseDir, string $filePath, ?string $downloadName = null): void
     {
         $fullPath = $this->getResolvedFilePath($baseDir, $filePath);
         if ($fullPath) {
@@ -353,7 +350,7 @@ class Context
             $this->res->sendfile($fullPath);
             return;
         }
-        $this->sendText('File not found', 404);
+        $this->text('File not found', 404);
     }
 
     /**
@@ -361,6 +358,9 @@ class Context
      */
     public function setStatus(int $code): void
     {
+        if ($this->headersSent) {
+            throw new RuntimeException('Headers already sent.');
+        }
         $this->res->status($code);
         $this->statusCode = $code;
     }
@@ -382,5 +382,25 @@ class Context
         // look into using swoole onClose event
         // also consider what to do when server wants to shut down
         return $this->srv->exist($this->req->fd);
+    }
+
+    /**
+     * Resolve file path within base directory
+     *
+     * This ensures that the resolved file is within the specified base directory
+     * to prevent directory traversal attacks.
+     */
+    private function getResolvedFilePath(string $baseDir, string $filePath): ?string
+    {
+        $resolvedBaseDir = \realpath($baseDir);
+        if ($resolvedBaseDir === false) {
+            return null;
+        }
+        $baseDir = \rtrim($resolvedBaseDir, '/') . '/';
+        $fullPath = \realpath("{$baseDir}{$filePath}");
+        if ($fullPath && \str_starts_with($fullPath, $baseDir) && \is_file($fullPath)) {
+            return $fullPath;
+        }
+        return null;
     }
 }

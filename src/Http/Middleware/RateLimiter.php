@@ -22,6 +22,7 @@ class RateLimiter
         $table->column('timestamp', Table::TYPE_INT, 8);
         $table->create();
         $this->table = $table;
+        $logger->info("RateLimiter initialized: maxRequestsPerIp={$maxRequestsPerIp}, timeWindow={$timeWindow}");
     }
 
     public function __invoke(Context $ctx, callable $next)

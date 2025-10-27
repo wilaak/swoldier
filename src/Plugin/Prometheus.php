@@ -13,11 +13,6 @@ class Prometheus extends BasePlugin
     public function __construct(
         private \Psr\Log\LoggerInterface $logger
     ) {
-
-    }
-
-    public function register(App $app): void
-    {
         $this->logger->info("Initializing Prometheus plugin");
         if (self::$table === null) {
             $table = new \Swoole\Table(1024);
@@ -37,12 +32,12 @@ class Prometheus extends BasePlugin
             $next($ctx);
         });
 
-        $app->match('GET', '/metrics', function (Context $ctx) {
+        $app->route('GET', '/metrics', function (Context $ctx) {
             $lines = [];
             foreach (self::$table as $ip => $row) {
                 $lines[] = "requests_total{ip=\"$ip\"} " . $row['requests'];
             }
-            $ctx->sendText(implode("\n", $lines));
+            $ctx->text(\implode("\n", $lines));
         });
     }
 }

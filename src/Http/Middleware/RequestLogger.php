@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Swoldier\Http\Middleware;
 
 use Psr\Log\LoggerInterface;
@@ -9,7 +11,9 @@ class RequestLogger
 {
     public function __construct(
         private LoggerInterface $logger
-    ) {}
+    ) {
+        $logger->info("RequestLogger middleware initialized");
+    }
 
     public function __invoke(Context $ctx, callable $next)
     {
@@ -17,7 +21,7 @@ class RequestLogger
         $path = $ctx->getPath();
         $ip = $ctx->getIp();
 
-        $this->logger?->info("{method} {path} {ip}", [
+        $this->logger->info("{method} {path} {ip}", [
             'method' => $method,
             'path' => $path,
             'ip' => $ip,
