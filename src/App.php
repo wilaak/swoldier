@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace Swoldier;
 
-use Swoldier\Enum\Http\HttpMethod;
-use Swoldier\Http\Context;
-use Swoldier\Plugin\BasePlugin;
+use Swoldier\Http\{HttpContext, Enum\HttpMethod, Enum\HttpStatus};
 
 use Swoole\Runtime;
 use Swoole\Http\{Server, Request, Response};
@@ -36,25 +34,14 @@ class App
      */
     private RadixRouter $router;
 
-    /**
-     * Registered plugins
-     */
-    private array $plugins = [];
-
     private function __construct(
         public array $trustedProxies = ['127.0.0.1', '::1'],
     ) {
         $this->router = new RadixRouter();
-    }
 
-    /**
-     * Register plugin
-     */
-    public function plugin(BasePlugin ...$plugins): void
-    {
-        foreach ($plugins as $plugin) {
-            $plugin->boot($this);
-            $this->plugins[] = $plugin;
+        $this->router->allowedMethods = [];
+        foreach (HttpMethod::cases() as $method) {
+            $this->router->allowedMethods[] = $method->value;
         }
     }
 
@@ -196,30 +183,30 @@ class App
             $setup($app);
             $pipeline = $app->buildMiddlewarePipeline(
                 $app->globalMiddleware,
-                function (Context $ctx) {
-                    $result = $ctx->getAttribute('_result');
-                    $router = $ctx->getAttribute('_router');
+                function (HttpContext $ctx) {
+                    $result = $ctx->data('_result');
+                    $router = $ctx->data('_router');
 
                     switch ($result['code']) {
                         case 200:
-                            if ($ctx->getMethod() === 'OPTIONS') {
-                                $allowedMethods = $router->methods($ctx->getPath());
-                                $ctx->setHeader('Allow', \implode(',', $allowedMethods));
+                            if ($ctx->method() === 'OPTIONS') {
+                                $allowedMethods = $router->methods($ctx->path());
+                                $ctx->header('Allow', \implode(',', $allowedMethods));
                             }
                             $result['handler']($ctx);
                             break;
 
                         case 404:
-                            $ctx->text('404 Not Found', 404);
+                            $ctx->text('404 Not Found', HttpStatus::NotFound);
                             break;
 
                         case 405:
-                            $ctx->setHeader('Allow', \implode(',', $result['allowed_methods']));
-                            if ($ctx->getMethod() === 'OPTIONS') {
-                                $ctx->setStatus(204);
+                            $ctx->header('Allow', \implode(',', $result['allowed_methods']));
+                            if ($ctx->method() === 'OPTIONS') {
+                                $ctx->status(204);
                                 break;
                             }
-                            $ctx->text('405 Method Not Allowed', 405);
+                            $ctx->text('405 Method Not Allowed', HttpStatus::MethodNotAllowed);
                             break;
                     }
 
@@ -236,7 +223,7 @@ class App
 
             $result = $app->router->lookup($method, $decodedPath);
 
-            $ctx = new Context(
+            $ctx = new HttpContext(
                 $server,
                 $req,
                 $res,
@@ -245,12 +232,13 @@ class App
             );
 
             try {
-                $ctx->setAttribute('_result', $result);
-                $ctx->setAttribute('_router', $app->router);
+                $ctx->data('_result', $result);
+                $ctx->data('_router', $app->router);
                 $pipeline($ctx);
             } catch (\Throwable $e) {
                 $res->status(500);
                 $res->end("Internal Server Error");
+                \fwrite(STDOUT, "Error handling request: " . $e->getMessage() . "\n");
             }
         });
 
@@ -269,7 +257,7 @@ class App
         return \array_reduce(
             \array_reverse($middlewares),
             function ($next, $middleware) {
-                return function (Context $ctx) use ($middleware, $next) {
+                return function (HttpContext $ctx) use ($middleware, $next) {
                     return $middleware($ctx, $next);
                 };
             },

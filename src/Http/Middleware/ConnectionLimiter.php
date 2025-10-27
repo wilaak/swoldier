@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Swoldier\Http\Middleware;
 
 use Psr\Log\LoggerInterface;
-use Swoldier\Http\Context;
+use Swoldier\Http\HttpContext;
 use Swoole\{Table, Atomic};
 
 class ConnectionLimiter
@@ -31,14 +31,14 @@ class ConnectionLimiter
         $logger->info("ConnectionLimiter initialized: maxConnections={$maxConnections}, maxConnectionsPerIp={$maxConnectionsPerIp}");
     }
 
-    public function __invoke(Context $ctx, callable $next)
+    public function __invoke(HttpContext $ctx, callable $next)
     {
         $maxTotal = $this->maxConnections;
         $maxPerIp = $this->maxConnectionsPerIp;
         $table = $this->table;
         $atomic = $this->totalConnections;
 
-        $ip = $ctx->getIp();
+        $ip = $ctx->ip();
         $count = $table->get($ip, 'count') ?? 0;
         $totalConnections = $atomic->get();
 
