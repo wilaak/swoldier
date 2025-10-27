@@ -253,9 +253,9 @@ class HttpContext
     }
 
     /**
-     * Terminate the connection immediately
+     * Close the connection without sending a response
      */
-    public function terminate(): void
+    public function abort(): void
     {
         $this->srv->close($this->req->fd);
     }

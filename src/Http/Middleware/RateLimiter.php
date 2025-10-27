@@ -42,7 +42,7 @@ class RateLimiter
                 // Within time window
                 if ($requests >= $maxRequests) {
                     // Rate limit exceeded
-                    $ctx->terminate();
+                    $ctx->abort();
                     $this->logger?->warning("Rate limit exceeded for {$ip}: {$requests} requests");
                     return;
                 } else {

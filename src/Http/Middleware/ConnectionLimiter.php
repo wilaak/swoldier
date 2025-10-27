@@ -42,13 +42,13 @@ class ConnectionLimiter
         $totalConnections = $atomic->get();
 
         if ($totalConnections >= $maxTotal) {
-            $ctx->terminate();
+            $ctx->abort();
             $this->logger?->error("Total connection limit exceeded: {$totalConnections} connections");
             return;
         }
 
         if ($count >= $maxPerIp) {
-            $ctx->terminate();
+            $ctx->abort();
             $this->logger?->warning("Connection limit exceeded for {$ip}: {$count} connections");
             return;
         }
