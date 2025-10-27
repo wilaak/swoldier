@@ -6,7 +6,7 @@ namespace Swoldier;
 
 use Psr\Log\LoggerInterface;
 use Swoldier\Enum\Http\HttpMethod;
-use Swoldier\Http\HttpContext;
+use Swoldier\Http\Context;
 use Swoldier\Plugin\BasePlugin;
 use Swoole\Coroutine;
 use Swoole\Runtime;
@@ -59,17 +59,17 @@ class App
     }
 
     /**
-     * Register a plugin with the application
-     * 
-     * @param BasePlugin $plugin Plugin instance to register
+     * Register a plugin
      */
-    public function registerPlugin(BasePlugin $plugin): void
+    public function plugin(BasePlugin ...$plugins): void
     {
-        $this->plugins[] = $plugin;
+        foreach ($plugins as $plugin) {
+            $this->plugins[] = $plugin;
+        }
     }
 
     /**
-     * Add a route with specified HTTP methods, pattern and handler
+     * Register a route with specific HTTP method(s)
      *
      * @param HttpMethod|string|array $methods HTTP method or list of methods
      * @param string $pattern Route pattern (e.g. /users/:id)
@@ -78,10 +78,18 @@ class App
     public function match(HttpMethod|string|array $methods, string $pattern, callable $handler)
     {
         $handler = $this->buildMiddlewarePipeline($this->middleware, $handler);
-        $method = $methods instanceof HttpMethod
-            ? $methods->value
-            : (is_array($methods) ? $methods : [$methods]);
-        $this->router->add($method, $pattern, $handler);
+
+        if (!is_array($methods)) {
+            $methods = [$methods];
+        }
+
+        foreach ($methods as $key => $method) {
+            if ($method instanceof HttpMethod) {
+                $methods[$key] = $method->value;
+            }
+        }
+
+        $this->router->add($methods, $pattern, $handler);
     }
 
     /**
@@ -149,9 +157,9 @@ class App
     }
 
     /**
-     * Create a route group with shared middleware
+     * Create a route group with specific middleware
      */
-    public function groupMiddleware(callable ...$middleware): self
+    public function group(callable ...$middleware): self
     {
         $group = clone $this;
         $group->middleware = [...$this->middleware, ...$middleware];
@@ -159,27 +167,11 @@ class App
     }
 
     /**
-     * Add global middleware to be applied to all requests
+     * Add global middleware
      */
-    public function globalMiddleware(callable ...$middleware): void
+    public function use(callable ...$middleware): void
     {
         $this->globalMiddleware = [...$this->globalMiddleware, ...$middleware];
-    }
-
-    /**
-     * Build middleware pipeline
-     */
-    private function buildMiddlewarePipeline(array $middlewares, callable $finalHandler): callable
-    {
-        return \array_reduce(
-            \array_reverse($middlewares),
-            function ($next, $middleware) {
-                return function (HttpContext $ctx) use ($middleware, $next) {
-                    return $middleware($ctx, $next);
-                };
-            },
-            $finalHandler
-        );
     }
 
     /**
@@ -199,7 +191,7 @@ class App
 
         $globalMiddlewarePipeline = $this->buildMiddlewarePipeline(
             $this->globalMiddleware,
-            fn(HttpContext $ctx) => $this->handleRequest($ctx)
+            fn(Context $ctx) => $this->handleRequest($ctx)
         );
 
         $server->on('Request', function (Request $req, Response $res) use ($server, $globalMiddlewarePipeline) {
@@ -213,7 +205,7 @@ class App
 
             $result = $this->router->lookup($method, $decodedPath);
 
-            $ctx = new HttpContext(
+            $ctx = new Context(
                 $server,
                 $req,
                 $res,
@@ -258,17 +250,10 @@ class App
             }
         });
 
-        $server->on('WorkerStop', function (Server $server, int $workerId) {
-            $this->logger->info("Worker {$workerId} stopping.");
-            foreach ($this->plugins as $plugin) {
-                $plugin->shutdown($this);
-            }
-        });
-
         $server->start();
     }
 
-    private function handleRequest(HttpContext $ctx): void
+    private function handleRequest(Context $ctx): void
     {
         $result = $ctx->getAttribute('_result');
         $router = $ctx->getAttribute('_router');
@@ -297,5 +282,18 @@ class App
         }
 
         $ctx->close();
+    }
+
+    private function buildMiddlewarePipeline(array $middlewares, callable $finalHandler): callable
+    {
+        return \array_reduce(
+            \array_reverse($middlewares),
+            function ($next, $middleware) {
+                return function (Context $ctx) use ($middleware, $next) {
+                    return $middleware($ctx, $next);
+                };
+            },
+            $finalHandler
+        );
     }
 }

@@ -3,7 +3,7 @@
 namespace Swoldier\Http\Middleware;
 
 use Psr\Log\LoggerInterface;
-use Swoldier\Http\HttpContext;
+use Swoldier\Http\Context;
 
 class RequestLogger
 {
@@ -11,7 +11,7 @@ class RequestLogger
         private LoggerInterface $logger
     ) {}
 
-    public function __invoke(HttpContext $ctx, callable $next)
+    public function __invoke(Context $ctx, callable $next)
     {
         $method = $ctx->getMethod();
         $path = $ctx->getPath();

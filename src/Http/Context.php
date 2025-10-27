@@ -7,7 +7,7 @@ namespace Swoldier\Http;
 /**
  * HTTP request and response context
  */
-class HttpContext
+class Context
 {
     public function __construct(
         private \Swoole\Http\Server $srv,

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Swoldier\Plugin;
 
-use Swoldier\{App, Http\HttpContext};
+use Swoldier\{App, Http\Context};
 
 class Prometheus extends BasePlugin
 {
@@ -30,14 +30,14 @@ class Prometheus extends BasePlugin
     public function boot(App $app): void
     {
         // Increment request count for every request (middleware or route)
-        $app->globalMiddleware(function (HttpContext $ctx, callable $next) {
+        $app->use(function (Context $ctx, callable $next) {
             $ip = $ctx->getIp();
             // You can track per-IP or global stats
             self::$table->incr($ip, 'requests');
             $next($ctx);
         });
 
-        $app->match('GET', '/metrics', function (HttpContext $ctx) {
+        $app->match('GET', '/metrics', function (Context $ctx) {
             $lines = [];
             foreach (self::$table as $ip => $row) {
                 $lines[] = "requests_total{ip=\"$ip\"} " . $row['requests'];

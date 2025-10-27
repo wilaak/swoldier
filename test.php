@@ -2,7 +2,12 @@
 
 require __DIR__ . '/vendor/autoload.php';
 
-use Swoldier\{App, Http\HttpContext, ContextAwareLogger};
+use Swoldier\{
+    App,
+    Http\Context,
+    ContextAwareLogger
+};
+
 use Swoldier\Http\Middleware\{ConnectionLimiter, RateLimiter};
 
 $logger = new ContextAwareLogger(
@@ -16,11 +21,11 @@ $app = new App(
     logger: $logger,
 );
 
-$app->registerPlugin(new Swoldier\Plugin\Prometheus(
+$app->plugin(new Swoldier\Plugin\Prometheus(
     $logger->withSettings('prometheus')
 ));
 
-$app->globalMiddleware(
+$app->use(
     new ConnectionLimiter(
         maxConnections: 500,
         maxConnectionsPerIp: 1,
@@ -33,30 +38,20 @@ $app->globalMiddleware(
     )
 );
 
-$test = $app->groupMiddleware(
-    function (HttpContext $ctx, callable $next) use ($logger) {
-        $logger->info("Handling request for {path} from {ip}", [
-            'path' => $ctx->getPath(),
-            'ip' => $ctx->getIp(),
-        ]);
-        $next($ctx);
-    }
-);
-
-$test->get('/test', function (HttpContext $ctx) use ($logger) {
+$test->get('/test', function (Context $ctx) {
     $ctx->sendJson($ctx->getAttribute('_router')->list());
 });
 
-$app->get('/limited', function (HttpContext $ctx) use ($logger) {
+$app->get('/limited', function (Context $ctx) {
     $ctx->write("This is a rate and connection limited endpoint.");
 });
 
-$app->get('/hello/:world?', function (HttpContext $ctx) {
+$app->get('/hello/:world?', function (Context $ctx) {
     $name = $ctx->getRouteParams('world') ?? 'World';
     $ctx->write("Hello, {$name}!");
 });
 
-$app->get('/stats', function (HttpContext $ctx) {
+$app->get('/stats', function (Context $ctx) {
     $stats = [
         'uptime' => time() - $_SERVER['REQUEST_TIME'],
         'memory_usage' => memory_get_usage(),

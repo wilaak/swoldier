@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Swoldier\Http\Middleware;
 
 use Psr\Log\LoggerInterface;
-use Swoldier\Http\HttpContext;
+use Swoldier\Http\Context;
 use Swoole\{Table, Atomic, Timer};
 
 class ConnectionLimiter
@@ -30,7 +30,7 @@ class ConnectionLimiter
         $this->totalConnections = new Atomic(0);
     }
 
-    public function __invoke(HttpContext $ctx, callable $next)
+    public function __invoke(Context $ctx, callable $next)
     {
         $maxTotal = $this->maxConnections;
         $maxPerIp = $this->maxConnectionsPerIp;

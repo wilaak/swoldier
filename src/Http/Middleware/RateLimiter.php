@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Swoldier\Http\Middleware;
 
 use Psr\Log\LoggerInterface;
-use Swoldier\Http\HttpContext;
+use Swoldier\Http\Context;
 use Swoole\Table;
 
 class RateLimiter
@@ -24,7 +24,7 @@ class RateLimiter
         $this->table = $table;
     }
 
-    public function __invoke(HttpContext $ctx, callable $next)
+    public function __invoke(Context $ctx, callable $next)
     {
         $maxRequests = $this->maxRequestsPerIp;
         $timeWindow = $this->timeWindow;
