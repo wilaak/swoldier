@@ -9,15 +9,13 @@ App::spawn(function (App $app) {
 
     $logger = new BatchLogger();
 
-    $app->use(new RequestLogger($logger), new ConnectionLimiter(100, 5, $logger));
-
-    $app->route(HttpMethod::GET, '/ping', function (HttpContext $ctx) use ($logger) {
+    $app->addRoute(HttpMethod::GET, '/ping', function (HttpContext $ctx) use ($logger) {
         $ctx->text('pong');
-        $logger->info("Handled /ping request from {ip}", ['ip' => $ctx->ip()]);
+        $logger->info("Handled /ping request from {ip}", ['ip' => $ctx->getClientIp()]);
     });
 
-    $app->route(HttpMethod::GET, '/hello/:world?', function (HttpContext $ctx) {
-        $name = $ctx->param('world') ?? 'World';
+    $app->addRoute(HttpMethod::GET, '/hello/:world?', function (HttpContext $ctx) {
+        $name = $ctx->getParam('world') ?? 'World';
         $ctx->text("Hello, {$name}!");
     });
 
@@ -25,12 +23,12 @@ App::spawn(function (App $app) {
         new RateLimiter(100, 60, $logger)
     );
 
-    $api->route(HttpMethod::GET, '/data', function (HttpContext $ctx) {
+    $api->addRoute(HttpMethod::GET, '/data', function (HttpContext $ctx) {
         $ctx->json(['data' => 'This is some rate limited data.']);
     });
 
 }, [
     'host' => '0.0.0.0',
     'port' => 8080,
-    'workers' => 4,
+    'workers' => 40,
 ]);

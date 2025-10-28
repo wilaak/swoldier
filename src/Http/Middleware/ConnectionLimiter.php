@@ -38,7 +38,7 @@ class ConnectionLimiter
         $table = $this->table;
         $atomic = $this->totalConnections;
 
-        $ip = $ctx->ip();
+        $ip = $ctx->getClientIp();
         $count = $table->get($ip, 'count') ?? 0;
         $totalConnections = $atomic->get();
 

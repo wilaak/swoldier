@@ -46,13 +46,13 @@ class App
     }
 
     /**
-     * Register route
+     * Add a route to the application
      *
-     * @param HttpMethod|string|array $methods HTTP method or list of methods
      * @param string $pattern Route pattern (e.g. /users/:id)
      * @param callable $handler Function to handle the request
+     * @param HttpMethod ...$methods HTTP method or list of methods
      */
-    public function route(HttpMethod|string|array $methods, string $pattern, callable $handler)
+    public function addRoute(HttpMethod|array $methods, string $pattern, callable $handler): self
     {
         $handler = $this->buildMiddlewarePipeline($this->middleware, $handler);
 
@@ -60,77 +60,10 @@ class App
             $methods = [$methods];
         }
 
-        foreach ($methods as $key => $method) {
-            if ($method instanceof HttpMethod) {
-                $methods[$key] = $method->value;
-            }
+        foreach ($methods as $method) {
+            $this->router->add($method->value, $pattern, $handler);
         }
-
-        $this->router->add($methods, $pattern, $handler);
-    }
-
-    /**
-     * Alias for route('GET', ...)
-     */
-    public function get(string $pattern, callable $handler)
-    {
-        $this->route('GET', $pattern, $handler);
-    }
-
-    /**
-     * Alias for route('POST', ...)
-     */
-    public function post(string $pattern, callable $handler)
-    {
-        $this->route('POST', $pattern, $handler);
-    }
-
-    /**
-     * Alias for route('PUT', ...)
-     */
-    public function put(string $pattern, callable $handler)
-    {
-        $this->route('PUT', $pattern, $handler);
-    }
-
-    /**
-     * Alias for route('PATCH', ...)
-     */
-    public function patch(string $pattern, callable $handler)
-    {
-        $this->route('PATCH', $pattern, $handler);
-    }
-
-    /**
-     * Alias for route('DELETE', ...)
-     */
-    public function delete(string $pattern, callable $handler)
-    {
-        $this->route('DELETE', $pattern, $handler);
-    }
-
-    /**
-     * Alias for route('HEAD', ...)
-     */
-    public function head(string $pattern, callable $handler)
-    {
-        $this->route('HEAD', $pattern, $handler);
-    }
-
-    /**
-     * Alias for route('OPTIONS', ...)
-     */
-    public function options(string $pattern, callable $handler)
-    {
-        $this->route('OPTIONS', $pattern, $handler);
-    }
-
-    /**
-     * Alias for all HTTP methods
-     */
-    public function any(string $pattern, callable $handler)
-    {
-        $this->route($this->router->allowedMethods, $pattern, $handler);
+        return $this;
     }
 
     /**
@@ -184,14 +117,14 @@ class App
             $pipeline = $app->buildMiddlewarePipeline(
                 $app->globalMiddleware,
                 function (HttpContext $ctx) {
-                    $result = $ctx->data('_result');
-                    $router = $ctx->data('_router');
+                    $result = $ctx->getData('_result');
+                    $router = $ctx->getData('_router');
 
                     switch ($result['code']) {
                         case 200:
-                            if ($ctx->method() === 'OPTIONS') {
-                                $allowedMethods = $router->methods($ctx->path());
-                                $ctx->header('Allow', \implode(',', $allowedMethods));
+                            if ($ctx->getMethod() === 'OPTIONS') {
+                                $allowedMethods = $router->methods($ctx->getPath());
+                                $ctx->setHeader('Allow', \implode(',', $allowedMethods));
                             }
                             $result['handler']($ctx);
                             break;
@@ -201,9 +134,9 @@ class App
                             break;
 
                         case 405:
-                            $ctx->header('Allow', \implode(',', $result['allowed_methods']));
-                            if ($ctx->method() === 'OPTIONS') {
-                                $ctx->status(204);
+                            $ctx->setHeader('Allow', \implode(',', $result['allowed_methods']));
+                            if ($ctx->getMethod() === 'OPTIONS') {
+                                $ctx->setStatus(HttpStatus::NoContent);
                                 break;
                             }
                             $ctx->text('405 Method Not Allowed', HttpStatus::MethodNotAllowed);
@@ -232,8 +165,8 @@ class App
             );
 
             try {
-                $ctx->data('_result', $result);
-                $ctx->data('_router', $app->router);
+                $ctx->setData('_result', $result);
+                $ctx->setData('_router', $app->router);
                 $pipeline($ctx);
             } catch (\Throwable $e) {
                 $res->status(500);

@@ -17,9 +17,9 @@ class RequestLogger
 
     public function __invoke(HttpContext $ctx, callable $next)
     {
-        $method = $ctx->method();
-        $path = $ctx->path();
-        $ip = $ctx->ip();
+        $method = $ctx->getMethod();
+        $path = $ctx->getPath();
+        $ip = $ctx->getClientIp();
 
         $this->logger->info("{method} {path} {ip}", [
             'method' => $method,

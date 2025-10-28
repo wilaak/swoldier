@@ -31,7 +31,7 @@ class RateLimiter
         $timeWindow = $this->timeWindow;
         $table = $this->table;
 
-        $ip = $ctx->ip();
+        $ip = $ctx->getClientIp();
         $currentTime = \time();
 
         $data = $table->get($ip);

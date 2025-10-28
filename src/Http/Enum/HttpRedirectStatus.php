@@ -13,6 +13,7 @@ enum HttpRedirectStatus: int
      * May change request method to GET (e.g., POST to GET).
      */
     case MovedPermanently = 301;
+
     /**
      * 302 Found
      * Temporary redirect to a different URL.
@@ -20,12 +21,14 @@ enum HttpRedirectStatus: int
      * May change request method to GET.
      */
     case Found = 302;
+
     /**
      * 303 See Other
      * Redirect to a different URL, typically after a POST.
      * Clients should use GET for the subsequent request.
      */
     case SeeOther = 303;
+
     /**
      * 307 Temporary Redirect
      * Temporary redirect to a different URL.
@@ -33,6 +36,7 @@ enum HttpRedirectStatus: int
      * Preserves the request method and body (e.g., POST stays POST).
      */
     case TemporaryRedirect = 307;
+
     /**
      * 308 Permanent Redirect
      * The resource has been permanently moved to a new URL.
