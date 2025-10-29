@@ -9,7 +9,7 @@ use Psr\Log\LogLevel;
 use Swoole\Timer;
 
 /**
- * Simple batch logger that buffers log entries and flushes them periodically for performance.
+ * Simple batch logger that buffers log entries and flushes them periodically for better performance.
  */
 class BatchLogger implements LoggerInterface
 {

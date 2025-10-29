@@ -25,7 +25,8 @@ class HttpContext
         private Response $res,
         private array $routeParams = [],
         private array $trustedProxies = ['127.0.0.1', '::1']
-    ) {}
+    ) {
+    }
 
     /**
      * @var HttpStatus $statusCode Response status code
@@ -106,7 +107,7 @@ class HttpContext
         }
 
         $forwardedFor = $this->getHeader('x-forwarded-for');
-        if (is_string($forwardedFor) && $forwardedFor !== '') {
+        if (\is_string($forwardedFor) && $forwardedFor !== '') {
             $forwarded = \array_map(\trim(...), \explode(',', $forwardedFor));
             foreach ($forwarded as $candidate) {
                 if (\filter_var($candidate, FILTER_VALIDATE_IP)) {

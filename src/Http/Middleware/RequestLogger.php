@@ -10,10 +10,8 @@ use Swoldier\Http\HttpContext;
 class RequestLogger
 {
     public function __construct(
-        private LoggerInterface $logger
-    ) {
-        $logger->info("RequestLogger middleware initialized");
-    }
+        private LoggerInterface $logger,
+    ) {}
 
     public function __invoke(HttpContext $ctx, callable $next)
     {

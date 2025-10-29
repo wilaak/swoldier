@@ -12,17 +12,26 @@ class RateLimiter
 {
     private Table $table;
 
+    /**
+     * @param int $maxRequestsPerIp Maximum requests allowed per IP within the time window
+     * @param int $timeWindow Time window in seconds
+     * @param LoggerInterface|null $logger Optional logger for logging rate limit breaches
+     * @param int $workerId Worker ID for logging purposes, will show init message only for worker 0
+     */
     public function __construct(
         private int $maxRequestsPerIp = 100,
         private int $timeWindow = 60,
-        private ?LoggerInterface $logger = null
+        private ?LoggerInterface $logger = null,
+        private int $workerId = 0
     ) {
         $table = new Table(1024);
         $table->column('requests', Table::TYPE_INT, 4);
         $table->column('timestamp', Table::TYPE_INT, 8);
         $table->create();
         $this->table = $table;
-        $logger->info("RateLimiter initialized: maxRequestsPerIp={$maxRequestsPerIp}, timeWindow={$timeWindow}");
+        if ($this->workerId === 0) {
+            $this->logger?->info("RateLimiter initialized: maxRequestsPerIp={$maxRequestsPerIp}, timeWindow={$timeWindow}");
+        }
     }
 
     public function __invoke(HttpContext $ctx, callable $next)
@@ -33,6 +42,8 @@ class RateLimiter
 
         $ip = $ctx->getClientIp();
         $currentTime = \time();
+
+        
 
         $data = $table->get($ip);
         if ($data) {

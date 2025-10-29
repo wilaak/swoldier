@@ -21,14 +21,17 @@ class ConnectionLimiter
     public function __construct(
         private int $maxConnections = 1000,
         private int $maxConnectionsPerIp = 1,
-        private ?LoggerInterface $logger = null
+        private ?LoggerInterface $logger = null,
+        private int $workerId = 0
     ) {
         $table = new Table($maxConnections);
         $table->column('count', Table::TYPE_INT);
         $table->create();
         $this->table = $table;
         $this->totalConnections = new Atomic(0);
-        $logger->info("ConnectionLimiter initialized: maxConnections={$maxConnections}, maxConnectionsPerIp={$maxConnectionsPerIp}");
+        if ($this->workerId === 0) {
+            $logger->info("ConnectionLimiter initialized: maxConnections={$maxConnections}, maxConnectionsPerIp={$maxConnectionsPerIp}");
+        }
     }
 
     public function __invoke(HttpContext $ctx, callable $next)

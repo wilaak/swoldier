@@ -4,31 +4,39 @@ require __DIR__ . '/vendor/autoload.php';
 
 use Swoldier\{App, Http\HttpContext, BatchLogger, Http\Enum\HttpMethod, Http\Enum\HttpStatus};
 use Swoldier\Http\Middleware\{ConnectionLimiter, RateLimiter, RequestLogger};
+use Swoldier\HttpWorker;
 
-App::spawn(function (App $app) {
+$app = new App(httpWorkers: 20);
+$rateLimiter = new RateLimiter(10, 60);
 
+$app->httpWorker(function (HttpWorker $worker) use($rateLimiter) {
     $logger = new BatchLogger();
+    $logger = $logger->withSettings(
+        channel: "HttpWorker{$worker->id}",
+    );
 
-    $app->addRoute(HttpMethod::GET, '/ping', function (HttpContext $ctx) use ($logger) {
+    $worker->globalMiddleware(
+        new RequestLogger($logger, $worker->id),
+        new ConnectionLimiter(500, 5, $logger, $worker->id)
+    );
+
+    $worker->addRoute(HttpMethod::GET, '/ping', function (HttpContext $ctx) use ($logger) {
         $ctx->text('pong');
         $logger->info("Handled /ping request from {ip}", ['ip' => $ctx->getClientIp()]);
     });
 
-    $app->addRoute(HttpMethod::GET, '/hello/:world?', function (HttpContext $ctx) {
+    $worker->addRoute(HttpMethod::GET, '/hello/:world?', function (HttpContext $ctx) use ($worker) {
         $name = $ctx->getParam('world') ?? 'World';
-        $ctx->text("Hello, {$name}!");
+        $ctx->text("Hello, {$name}! (from worker {$worker->id})");
     });
 
-    $api = $app->group(
-        new RateLimiter(100, 60, $logger)
+    $api = $worker->groupMiddleware(
+        $rateLimiter,
     );
 
     $api->addRoute(HttpMethod::GET, '/data', function (HttpContext $ctx) {
         $ctx->json(['data' => 'This is some rate limited data.']);
     });
+});
 
-}, [
-    'host' => '0.0.0.0',
-    'port' => 8080,
-    'workers' => 40,
-]);
+$app->run();
