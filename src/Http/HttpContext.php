@@ -398,10 +398,17 @@ class HttpContext
 
     /**
      * Run a background task and await its result
+     * 
+     * @throws RuntimeException if the task times out
      */
     public function awaitTask(string $name, mixed $payload, float $timeout = 4): mixed
     {
-        return $this->srv->taskCo([['name' => $name, 'payload' => $payload]], $timeout)[0] ?? null;
+        $data = $this->srv->taskCo([['name' => $name, 'payload' => $payload]], $timeout);
+
+        if ($data[0] === false) {
+            throw new RuntimeException("Task '$name' timed out after {$timeout} seconds.");
+        }
+        return $data[0] ?? null;
     }
 
     /**

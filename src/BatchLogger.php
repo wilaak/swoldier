@@ -33,7 +33,7 @@ class BatchLogger implements LoggerInterface
      */
     public function __construct(
         private string $channel = 'app',
-        private int $flushDelayMs = 100,
+        private int $flushDelayMs = 200,
         private bool $useColors = true,
         private string $stdoutLogLevel = LogLevel::INFO,
         private ?string $logFilePath = null,
@@ -240,13 +240,5 @@ class BatchLogger implements LoggerInterface
             $replace['{' . $key . '}'] = $val;
         }
         return \strtr($message, $replace);
-    }
-
-    public function __destruct()
-    {
-        $this->flush();
-        if ($this->flushTimerId !== null) {
-            Timer::clear($this->flushTimerId);
-        }
     }
 }

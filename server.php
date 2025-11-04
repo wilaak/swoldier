@@ -9,18 +9,23 @@ use Swoldier\Middleware\RequestLogger;
 // Create the application instance
 $app = new App(
     port: 8082,
-    httpWorkers: 2,
-    taskWorkers: 1
+    httpWorkers: 4,
+    taskWorkers: 2
 );
 
 // Create a logger instance
-$logger = new BatchLogger();
+$logger = new BatchLogger(
+    logFilePath: __DIR__ . '/server.log',
+);
 
-// Register middleware and logger for each worker
 $app->on(Event::WorkerStart, function ($workerId) use (&$logger, $app) {
-    $workerLogger = $logger->withSettings(channel: "worker-{$workerId}");
-    $app->use(new RequestLogger(logger: $workerLogger));
+    $logger = $logger->withSettings(channel: "worker-{$workerId}");
+    $app->use(
+        new RequestLogger($logger)
+    );
 });
+
+
 
 // Register a task handler
 $app->task('testTask', function (string $data) {
@@ -31,13 +36,11 @@ $app->task('testTask', function (string $data) {
 // Define a route handler
 $app->get('/', function (HttpContext $ctx) {
     // Run a task and wait for the result
-    $result = $ctx->awaitTask('testTask', ['test']);
-
-    // Send the result in the response
+    $result = $ctx->awaitTask('testTask', ['test'], 1);
     $ctx->end("Task result: $result");
 });
 
 // Log server startup
-$app->run(function ($host, $port) use (&$logger) {
+$app->run(function ($host, $port) use ($logger) {
     $logger->info("Server running at http://{$host}:{$port}/");
 });
