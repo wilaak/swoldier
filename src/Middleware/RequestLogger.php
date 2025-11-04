@@ -11,7 +11,8 @@ class RequestLogger
 {
     public function __construct(
         private LoggerInterface $logger,
-    ) {}
+    ) {
+    }
 
     public function __invoke(HttpContext $ctx, callable $next)
     {

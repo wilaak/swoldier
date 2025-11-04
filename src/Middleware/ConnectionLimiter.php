@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Swoldier\Middleware;
 
 use Psr\Log\LoggerInterface;
-use Swoldier\HttpContext;
+use Swoldier\Http\HttpContext;
 use Swoole\{Table, Atomic};
 
 class ConnectionLimiter
@@ -47,18 +47,18 @@ class ConnectionLimiter
         $table = $this->table;
         $atomic = $this->totalConnections;
 
-        $ip = $ctx->getClientIp();
+        $ip = $ctx->getIp();
         $count = $table->get($ip, 'count') ?? 0;
         $totalConnections = $atomic->get();
 
         if ($totalConnections >= $maxTotal) {
-            $ctx->abort();
+            $ctx->abortConnection();
             $this->logger?->error("Total connection limit exceeded: {$totalConnections} connections");
             return;
         }
 
         if ($count >= $maxPerIp) {
-            $ctx->abort();
+            $ctx->abortConnection();
             $this->logger?->warning("Connection limit exceeded for {$ip}: {$count} connections");
             return;
         }

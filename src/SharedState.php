@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Swoldier;
 
 use Swoole\{Table, Atomic, Lock};
@@ -13,7 +15,7 @@ class SharedState
 
     /**
      * Store a shared memory entry
-     * 
+     *
      * @param string $key Entry key
      * @param Table|Atomic|Lock $value Shared memory object
      */
@@ -27,7 +29,7 @@ class SharedState
 
     /**
      * Retrieve a shared memory entry
-     * 
+     *
      * @param string $key Entry key
      * @return Table|Atomic|Lock|null Shared memory object or null if not found
      */

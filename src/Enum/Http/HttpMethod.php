@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Swoldier\Enum;
+namespace Swoldier\Enum\Http;
 
-enum Method: string
+enum HttpMethod: string
 {
     case GET = 'GET';
     case POST = 'POST';

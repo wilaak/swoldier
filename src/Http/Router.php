@@ -4,11 +4,12 @@ declare(strict_types=1);
 
 namespace Swoldier\Http;
 
-use Swoldier\{HttpContext, Enum\StatusCode};
+use Swoldier\Enum\Http\HttpStatus;
 
 use Wilaak\Http\RadixRouter;
 
-use Closure, LogicException;
+use Closure;
+use LogicException;
 
 class Router
 {
@@ -34,7 +35,8 @@ class Router
 
     public function __construct(
         public RadixRouter $router,
-    ) {}
+    ) {
+    }
 
     /**
      * Add route to the application
@@ -73,13 +75,13 @@ class Router
             throw new LogicException("Cannot add global middleware to a route group");
         }
         $this->globalMiddleware = [...$this->globalMiddleware, ...$middleware];
-        $this->globalMiddlewarePipeline = self::composeMiddleware($this->globalMiddleware, fn(HttpContext $ctx) => $ctx);
+        $this->globalMiddlewarePipeline = self::composeMiddleware($this->globalMiddleware, fn (HttpContext $ctx) => $ctx);
         return $this;
     }
 
     /**
      * Handle incoming HTTP request
-     * 
+     *
      * @param HttpContext $ctx The HTTP context containing request and response
      * @return HttpContext The modified HTTP context after handling the request
      */
@@ -89,12 +91,12 @@ class Router
             throw new LogicException("Cannot dispatch requests on a route group");
         }
 
-        $method = $ctx->method();
-        $decodedPath = urldecode($ctx->path());
+        $method = $ctx->getMethod();
+        $decodedPath = \urldecode($ctx->getPath());
 
         $result = $this->router->lookup($method, $decodedPath);
 
-        $ctx->setParams($result['params'] ?? []);
+        $ctx->setRouteParams($result['params'] ?? []);
 
         if ($this->globalMiddlewarePipeline !== null) {
             ($this->globalMiddlewarePipeline)($ctx);
@@ -102,7 +104,7 @@ class Router
 
         $code = $result['code'];
 
-        if ($code === StatusCode::OK->value) {
+        if ($code === HttpStatus::OK->value) {
 
             if ($method === 'OPTIONS') {
                 $allowedMethods = $this->router->methods($decodedPath);
@@ -110,18 +112,17 @@ class Router
             }
 
             $result['handler']($ctx);
-
             return $ctx->end();
         }
 
-        if ($code === StatusCode::MethodNotAllowed->value) {
+        if ($code === HttpStatus::MethodNotAllowed->value) {
 
             if ($method === 'HEAD') {
 
                 $result = $this->router->lookup('GET', $decodedPath);
 
-                if ($result['code'] === StatusCode::OK->value) {
-                    $ctx->status(StatusCode::OK);
+                if ($result['code'] === HttpStatus::OK->value) {
+                    $ctx->setStatus(HttpStatus::OK->value);
                     return $ctx->end();
                 }
             }
@@ -129,14 +130,14 @@ class Router
             $ctx->setHeader('Allow', \implode(',', $result['allowed_methods']));
 
             if ($method === 'OPTIONS') {
-                $ctx->status(StatusCode::NoContent);
+                $ctx->setStatus(HttpStatus::NoContent->value);
                 return $ctx->end();
             }
 
-            return $ctx->text('405 Method Not Allowed', StatusCode::MethodNotAllowed);
+            return $ctx->sendText('405 Method Not Allowed', HttpStatus::MethodNotAllowed->value);
         }
 
-        return $ctx->text('404 Not Found', StatusCode::NotFound);
+        return $ctx->sendText('404 Not Found', HttpStatus::NotFound->value);
     }
 
     /**
@@ -148,8 +149,8 @@ class Router
      */
     public static function composeMiddleware(array $middlewares, callable $finalHandler): Closure
     {
-        foreach (array_reverse($middlewares) as $middleware) {
-            $finalHandler = fn(HttpContext $ctx) => $middleware($ctx, $finalHandler);
+        foreach (\array_reverse($middlewares) as $middleware) {
+            $finalHandler = fn (HttpContext $ctx) => $middleware($ctx, $finalHandler);
         }
         return $finalHandler;
     }

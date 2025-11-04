@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Swoldier\Middleware;
 
 use Psr\Log\LoggerInterface;
-use Swoldier\HttpContext;
+use Swoldier\Http\HttpContext;
 use Swoole\Table;
 
 class RateLimiter
@@ -40,10 +40,8 @@ class RateLimiter
         $timeWindow = $this->timeWindow;
         $table = $this->table;
 
-        $ip = $ctx->ip();
+        $ip = $ctx->getIp();
         $currentTime = \time();
-
-        
 
         $data = $table->get($ip);
         if ($data) {
@@ -54,7 +52,7 @@ class RateLimiter
                 // Within time window
                 if ($requests >= $maxRequests) {
                     // Rate limit exceeded
-                    $ctx->abort();
+                    $ctx->abortConnection();
                     $this->logger?->warning("Rate limit exceeded for {$ip}: {$requests} requests");
                     return;
                 } else {

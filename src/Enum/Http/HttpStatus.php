@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Swoldier\Enum;
+namespace Swoldier\Enum\Http;
 
-enum StatusCode: int
+enum HttpStatus: int
 {
     // 1xx Informational
     case Continue = 100;

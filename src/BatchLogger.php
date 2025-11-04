@@ -38,7 +38,8 @@ class BatchLogger implements LoggerInterface
         private string $stdoutLogLevel = LogLevel::INFO,
         private ?string $logFilePath = null,
         private string $fileLogLevel = LogLevel::INFO,
-    ) {}
+    ) {
+    }
 
     /**
      * Create a new logger with modified settings.
