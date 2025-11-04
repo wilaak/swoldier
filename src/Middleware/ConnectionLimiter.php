@@ -2,15 +2,16 @@
 
 declare(strict_types=1);
 
-namespace Swoldier\Http\Middleware;
+namespace Swoldier\Middleware;
 
 use Psr\Log\LoggerInterface;
-use Swoldier\Http\HttpContext;
+use Swoldier\HttpContext;
 use Swoole\{Table, Atomic};
 
 class ConnectionLimiter
 {
     private Table $table;
+
     private Atomic $totalConnections;
 
     /**
@@ -24,14 +25,19 @@ class ConnectionLimiter
         private ?LoggerInterface $logger = null,
         private int $workerId = 0
     ) {
-        $table = new Table($maxConnections);
+        $table = new Table($maxConnections + 1024);
         $table->column('count', Table::TYPE_INT);
         $table->create();
         $this->table = $table;
         $this->totalConnections = new Atomic(0);
-        if ($this->workerId === 0) {
-            $logger->info("ConnectionLimiter initialized: maxConnections={$maxConnections}, maxConnectionsPerIp={$maxConnectionsPerIp}");
-        }
+    }
+
+    /**
+     * @param LoggerInterface $logger Logger instance for logging
+     */
+    public function setLogger(LoggerInterface $logger): void
+    {
+        $this->logger = $logger;
     }
 
     public function __invoke(HttpContext $ctx, callable $next)

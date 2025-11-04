@@ -16,6 +16,10 @@ Swoldier applications operate with two types of workers:
 
 Below is a usage example to get your started.
 
+```PHP
+
+```
+
 ## Links
 
 * [Introduction to swoole](https://phpgoodness.com/articles/introduction-to-swoole.html)

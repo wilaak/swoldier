@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace Swoldier;
 
-use Swoole\Http\{Server, Request, Response};
+use Swoldier\Enum\Event;
 
+use Swoole\Http\{Server, Request, Response};
 use Swoole\Runtime;
 
-use Closure;
+use Wilaak\Http\RadixRouter;
+
+use Swoldier\Http\Router;
 
 /**
  * Swoldier micro-framework
@@ -18,57 +21,75 @@ use Closure;
  */
 class App
 {
-    private Closure $httpWorkerSetup;
+    /**
+     * App lifecycle event listeners
+     */
+    private array $events = [];
 
-    private Closure $taskWorkerSetup;
+    private Router $router;
 
     /**
      * @param string $host Server host
      * @param int $port Server port
-     * @param int $workers Number of worker processes
+     * @param int $httpWorkers Number of HTTP worker processes
+     * @param int $taskWorkers Number of Task worker processes
      * @param array $trustedProxies List of trusted proxy IPs for client IP resolution
      */
     public function __construct(
         public string $host = '0.0.0.0',
         public int $port = 8080,
         public int $httpWorkers = 4,
-        public int $taskWorkers = 0,
+        public int $taskWorkers = 2,
         public array $trustedProxies = ['127.0.0.1', '::1'],
-    ) {}
-
-    /**
-     * Set up the HTTP worker configuration
-     * 
-     * @param callable $setup Function that receives the HttpWorker instance
-     */
-    public function httpWorker(callable $setup): self
-    {
-        if (!isset($this->httpWorkerSetup)) {
-            $this->httpWorkerSetup = $setup;
-            return $this;
-        }
-        throw new \RuntimeException("HTTP Worker already configured");
+    ) {
+        $this->router = new Router(new RadixRouter());
     }
 
     /**
-     * Set up the Task worker configuration
-     * 
-     * @param callable $setup Function that receives the TaskWorker instance
+     * Register an event listener
      */
-    public function taskWorker(callable $setup): self
+    public function on(Event $event, callable $callback): self
     {
-        if (!isset($this->taskWorkerSetup)) {
-            $this->taskWorkerSetup = $setup;
-            return $this;
-        }
-        throw new \RuntimeException("Task Worker already configured");
+        $this->events[$event->name][] = $callback;
+
+        return $this;
+    }
+
+    /**
+     * Add route to the application
+     */
+    public function map(string $method, string $pattern, callable $handler): Router
+    {
+        return $this->router->map($method, $pattern, $handler);
+    }
+
+    /**
+     * Add global middleware to the application
+     */
+    public function use(callable ...$middleware): Router
+    {
+        return $this->router->use(...$middleware);
+    }
+
+    /**
+     * Create a route group with shared middleware.
+     */
+    public function group(callable ...$middleware): Router
+    {
+        return $this->router->group(...$middleware);
     }
 
     /**
      * Run the application
+     * 
+     * @param callable $callback Callback to execute when the server starts
      */
-    public function run(): void
+    public function run(?callable $callback = null): void
     {
+        if ($callback) {
+            $this->on(Event::Start, $callback);
+        }
+
         Runtime::enableCoroutine();
 
         $server = new Server($this->host, $this->port);
@@ -80,19 +101,31 @@ class App
             'open_cpu_affinity' => true,
         ]);
 
-        /** @var HttpWorker $worker */
-        $worker = new HttpWorker(0);
-
-        $server->on('Start', function (Server $srv) use (&$worker) {
-            ($this->httpWorkerSetup)($worker);
+        $server->on('Start', function (Server $server) {
+            foreach ($this->events[Event::Start->name] ?? [] as $callback) {
+                $callback();
+            }
         });
 
-        $server->on('WorkerStart', function (Server $srv, int $workerId) use (&$worker) {
-            $worker = $worker;
+        $server->on('WorkerStart', function (Server $server, int $workerId) {
+            foreach ($this->events[Event::WorkerStart->name] ?? [] as $callback) {
+                $callback();
+            }
         });
 
-        $server->on('Request', function (Request $req, Response $res) use (&$worker, &$server) {
-            $worker->handleRequest($server, $req, $res);
+        $server->on('WorkerStop', function (Server $server, int $workerId) {
+            foreach ($this->events[Event::WorkerStop->name] ?? [] as $callback) {
+                $callback();
+            }
+        });
+
+        $server->on('Request', function (Request $request, Response $response) use (&$server) {
+            $this->router->dispatch(
+                new HttpContext($server, $request, $response)
+            );
+        });
+
+        $server->on('Task', function (Server $srv, int $taskId, int $workerId, mixed $data) {
         });
 
         $server->start();

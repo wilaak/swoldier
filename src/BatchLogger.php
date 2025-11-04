@@ -38,8 +38,7 @@ class BatchLogger implements LoggerInterface
         private string $stdoutLogLevel = LogLevel::INFO,
         private ?string $logFilePath = null,
         private string $fileLogLevel = LogLevel::INFO,
-    ) {
-    }
+    ) {}
 
     /**
      * Create a new logger with modified settings.
@@ -240,5 +239,13 @@ class BatchLogger implements LoggerInterface
             $replace['{' . $key . '}'] = $val;
         }
         return \strtr($message, $replace);
+    }
+
+    public function __destruct()
+    {
+        $this->flush();
+        if ($this->flushTimerId !== null) {
+            Timer::clear($this->flushTimerId);
+        }
     }
 }

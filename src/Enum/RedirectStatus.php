@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Swoldier\Http\Enum;
+namespace Swoldier\Enum;
 
-enum HttpRedirectStatus: int
+enum RedirectStatus: int
 {
     /**
      * 301 Moved Permanently

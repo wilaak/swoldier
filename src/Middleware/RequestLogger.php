@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Swoldier\Http\Middleware;
+namespace Swoldier\Middleware;
 
 use Psr\Log\LoggerInterface;
-use Swoldier\Http\HttpContext;
+use Swoldier\HttpContext;
 
 class RequestLogger
 {

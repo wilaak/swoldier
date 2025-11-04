@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Swoldier\Http\Middleware;
+namespace Swoldier\Middleware;
 
 use Psr\Log\LoggerInterface;
-use Swoldier\Http\HttpContext;
+use Swoldier\HttpContext;
 use Swoole\Table;
 
 class RateLimiter
@@ -40,7 +40,7 @@ class RateLimiter
         $timeWindow = $this->timeWindow;
         $table = $this->table;
 
-        $ip = $ctx->getClientIp();
+        $ip = $ctx->ip();
         $currentTime = \time();
 
         
