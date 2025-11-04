@@ -239,7 +239,7 @@ class App
             }
 
             $handler = $this->tasks[$name];
-            $result = $handler($taskId, $workerId, ...$payload);
+            $result = $handler(...$payload);
             $srv->finish($result);
         });
 

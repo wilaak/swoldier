@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Swoldier\Middleware;
 
 use Psr\Log\LoggerInterface;
-use Swoldier\HttpContext;
+use Swoldier\Http\HttpContext;
 
 class RequestLogger
 {
@@ -18,7 +18,7 @@ class RequestLogger
     {
         $method = $ctx->getMethod();
         $path = $ctx->getPath();
-        $ip = $ctx->getClientIp();
+        $ip = $ctx->getIp();
 
         $this->logger->info("{method} {path} {ip}", [
             'method' => $method,

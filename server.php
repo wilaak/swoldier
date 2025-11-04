@@ -1,25 +1,43 @@
+
 <?php
 
 require __DIR__ . '/vendor/autoload.php';
 
-use Swoldier\{App, Event, Http\HttpContext};
+use Swoldier\{App, BatchLogger, Event, Http\HttpContext};
+use Swoldier\Middleware\RequestLogger;
 
-$app = new App(port: 8082, httpWorkers: 1, taskWorkers: 1);
+// Create the application instance
+$app = new App(
+    port: 8082,
+    httpWorkers: 2,
+    taskWorkers: 1
+);
 
-$app->task('testTask', function (int $taskId, int $workerId, string $data) {
-    echo "Executing task #$taskId in worker #$workerId with data: $data\n";
+// Create a logger instance
+$logger = new BatchLogger();
+
+// Register middleware and logger for each worker
+$app->on(Event::WorkerStart, function ($workerId) use (&$logger, $app) {
+    $workerLogger = $logger->withSettings(channel: "worker-{$workerId}");
+    $app->use(new RequestLogger(logger: $workerLogger));
+});
+
+// Register a task handler
+$app->task('testTask', function (string $data) {
+    // Simulate some background work
     return strtoupper($data);
 });
 
+// Define a route handler
 $app->get('/', function (HttpContext $ctx) {
-
+    // Run a task and wait for the result
     $result = $ctx->awaitTask('testTask', ['test']);
 
-    var_dump($result);
-
+    // Send the result in the response
     $ctx->end("Task result: $result");
 });
 
-$app->run(function ($host, $port) {
-    echo "Server running at http://{$host}:{$port}\n";
+// Log server startup
+$app->run(function ($host, $port) use (&$logger) {
+    $logger->info("Server running at http://{$host}:{$port}/");
 });

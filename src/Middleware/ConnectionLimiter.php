@@ -14,6 +14,8 @@ class ConnectionLimiter
 
     private Atomic $totalConnections;
 
+    private ?LoggerInterface $logger = null;
+
     /**
      * @param int $maxConnections Maximum total concurrent connections allowed
      * @param int $maxConnectionsPerIp Maximum concurrent connections allowed per IP
@@ -22,7 +24,6 @@ class ConnectionLimiter
     public function __construct(
         private int $maxConnections = 1000,
         private int $maxConnectionsPerIp = 1,
-        private ?LoggerInterface $logger = null,
         private int $workerId = 0
     ) {
         $table = new Table($maxConnections + 1024);

@@ -391,7 +391,7 @@ class HttpContext
     /**
      * Run a background task
      */
-    public function dispatchTask(string $name, array $payload): void
+    public function dispatchTask(string $name, mixed $payload): void
     {
         $this->srv->task(['name' => $name, 'payload' => $payload]);
     }
@@ -399,7 +399,7 @@ class HttpContext
     /**
      * Run a background task and await its result
      */
-    public function awaitTask(string $name, array $payload, float $timeout = 4): mixed
+    public function awaitTask(string $name, mixed $payload, float $timeout = 4): mixed
     {
         return $this->srv->taskCo([['name' => $name, 'payload' => $payload]], $timeout)[0] ?? null;
     }
