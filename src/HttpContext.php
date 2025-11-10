@@ -33,6 +33,11 @@ class HttpContext
     private bool $committed = false;
 
     /**
+     * Whether the last write was successful (connection still open) 
+     */
+    public bool $connected = true;
+
+    /**
      * Custom attributes for this context
      */
     private array $attributes = [];
@@ -249,81 +254,84 @@ class HttpContext
 
     /**
      * Write data to the response buffer
+     * 
+     * @return bool Whether the write was successful (connection still open)
      */
-    public function write(string $data): self
+    public function write(string $data): bool
     {
         $this->committed = true;
-        $this->response->write(($this->writer)($data));
-        return $this;
+        $this->connected = $this->response->write(($this->writer)($data));
+        return $this->connected;
     }
 
     /**
      * End response
+     * 
+     * @param string|null $data Optional data to write before ending
      */
-    public function end(?string $data = null): self
+    public function end(?string $data = null): void
     {
         $this->committed = true;
+        $this->connected = false;
         if ($data === null) {
             $this->response->end();
-            return $this;
         }
         $this->response->end(($this->writer)($data));
-        return $this;
     }
 
     /**
-     * Close connection
+     * Close connection at the TCP level
      */
-    public function abort(): self
+    public function abort(): void
     {
         $this->server->close($this->request->fd);
-        return $this;
+        $this->connected = false;
     }
 
     /**
      * Send JSON response
      */
-    public function json(mixed $data, ?int $status = null): self
+    public function json(mixed $data, ?int $status = null): void
     {
         $this->setHeader('Content-Type', 'application/json; charset=utf-8');
         if ($status !== null) {
             $this->setStatus($status);
         }
-        return $this->end(\json_encode($data));
+        $this->end(\json_encode($data));
     }
 
     /**
      * Send HTML response
      */
-    public function html(string $html, ?int $status = null): self
+    public function html(string $html, ?int $status = null): void 
     {
         $this->setHeader('Content-Type', 'text/html; charset=utf-8');
         if ($status !== null) {
             $this->setStatus($status);
         }
-        return $this->end($html);
+        $this->end($html);
     }
 
     /**
      * Send plain text response
      */
-    public function text(string $text, ?int $status = null): self
+    public function text(string $text, ?int $status = null): void
     {
         $this->setHeader('Content-Type', 'text/plain; charset=utf-8');
         if ($status !== null) {
             $this->setStatus($status);
         }
-        return $this->end($text);
+        $this->end($text);
     }
 
     /**
      * Send redirect response
      */
-    public function redirect(string $url, int $status = 302): self
+    public function redirect(string $url, int $status = 302): void
     {
         $this->setHeader('Location', $url);
         $this->setStatus($status);
-        return $this->end();
+        $this->end();
     }
 
     /**
@@ -334,13 +342,14 @@ class HttpContext
      * @param bool $download Whether to force download (Content-Disposition: attachment)
      * @param string|null $downloadName The filename to use for download (optional)
      */
-    public function file(string $baseDir, string $filePath, bool $download = false, ?string $downloadName = null): self
+    public function file(string $baseDir, string $filePath, bool $download = false, ?string $downloadName = null): void
     {
         $this->assertNotCommitted();
 
         $fullPath = $this->getResolvedFilePath($baseDir, $filePath);
         if (!$fullPath) {
-            return $this->text('File not found', 404);
+            $this->text('File not found', 404);
+            return;
         }
 
         if ($download) {
@@ -366,7 +375,6 @@ class HttpContext
         }
         \fclose($resource);
         $this->end();
-        return $this;
     }
 
     /**
@@ -393,11 +401,17 @@ class HttpContext
      */
     public function isConnected(): bool
     {
+        // When writing and an error occurs this will be set to false
+        // We do this since the underlying TCP connection can remain open
+        // Until the browser actually closes it.
+        if (!$this->connected) {
+            return false;
+        }
         if ($this->getScheme() !== 'https') {
-            // For HTTP connections we must check if the connection still exists
+            // For HTTP connections we must check if the connection descriptor still exists
             return $this->server->exist($this->request->fd);
         }
-        // For HTTPS connections, we can only check if the response is writable
+        // For HTTPS connections we can check if the response is still writable
         return $this->response->isWritable();
     }
 
