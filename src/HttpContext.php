@@ -2,49 +2,61 @@
 
 declare(strict_types=1);
 
-namespace Swoldier\Http;
+namespace Swoldier;
 
 use Swoole\{Server, Http\Request, Http\Response};
 
-use RuntimeException;
+use RuntimeException, Closure;
 
-/**
- * HTTP request and response context
- */
 class HttpContext
 {
     public function __construct(
-        private Server $srv,
-        private Request $req,
-        private Response $res,
+        private Server $server,
+        private Request $request,
+        private Response $response,
         private array $trustedProxies = ['127.0.0.1', '::1'],
+        private array $routeParams = []
     ) {
+        $this->writer = function (string $data): string {
+            return $data;
+        };
     }
 
     /**
-     * @var array|null Route parameters extracted from the route pattern defined in the router
+     * Response status code
      */
-    private ?array $routeParams = null;
+    private int $status = 200;
 
     /**
-     * @var int HTTP response status code
+     * Whether the response has been committed (headers sent)
      */
-    private int $statusCode = 200;
+    private bool $committed = false;
 
     /**
-     * @var bool Whether response has been committed
-     */
-    private bool $isCommitted = false;
-
-    /**
-     * @var array key-value attribute store
+     * Custom attributes for this context
      */
     private array $attributes = [];
 
     /**
-     * Get custom attributes for this context
+     * Response body writer function
      */
-    public function getAttribute(?string $key = null, mixed $default = null): mixed
+    private Closure $writer;
+
+    /**
+     * Intercept or transform body output before sending
+     *
+     * @param callable(string): string $writer The writer function
+     */
+    public function setWriter(callable $writer): self
+    {
+        $this->writer = Closure::fromCallable($writer);
+        return $this;
+    }
+
+    /**
+     * Get custom attribute for this context
+     */
+    public function getAttr(?string $key = null, mixed $default = null): mixed
     {
         if ($key === null) {
             return $this->attributes;
@@ -55,7 +67,7 @@ class HttpContext
     /**
      * Set custom attribute for this context
      */
-    public function setAttribute(string $key, mixed $value): self
+    public function setAttr(string $key, mixed $value): self
     {
         $this->attributes[$key] = $value;
         return $this;
@@ -66,7 +78,7 @@ class HttpContext
      */
     public function getMethod(): string
     {
-        return $this->req->server['request_method'] ?? '';
+        return $this->request->server['request_method'] ?? '';
     }
 
     /**
@@ -74,7 +86,7 @@ class HttpContext
      */
     public function getUri(): string
     {
-        return $this->req->server['request_uri'];
+        return $this->request->server['request_uri'];
     }
 
     /**
@@ -90,7 +102,7 @@ class HttpContext
      */
     public function getBody(): string
     {
-        return $this->req->rawContent() ?: '';
+        return $this->request->rawContent() ?: '';
     }
 
     /**
@@ -98,7 +110,7 @@ class HttpContext
      */
     public function getIp(): string
     {
-        $ip = $this->req->server['remote_addr'];
+        $ip = $this->request->server['remote_addr'];
 
         if (!\in_array($ip, $this->trustedProxies, true)) {
             return $ip;
@@ -121,7 +133,7 @@ class HttpContext
      */
     public function getHost(): ?string
     {
-        return $this->req->header['host'] ?? null;
+        return $this->request->header['host'] ?? null;
     }
 
     /**
@@ -129,7 +141,7 @@ class HttpContext
      */
     public function getScheme(): string
     {
-        $ip = $this->req->server['remote_addr'];
+        $ip = $this->request->server['remote_addr'];
 
         if (\in_array($ip, $this->trustedProxies, true)) {
             $proto = $this->getHeader('x-forwarded-proto') ?? $this->getHeader('forwarded');
@@ -146,7 +158,7 @@ class HttpContext
      */
     public function getProtocol(): string
     {
-        return $this->req->server['server_protocol'] ?? 'HTTP/1.1';
+        return $this->request->server['server_protocol'] ?? 'HTTP/1.1';
     }
 
     /**
@@ -161,26 +173,14 @@ class HttpContext
     }
 
     /**
-     * Set route parameters
-     */
-    public function setRouteParams(array $params): self
-    {
-        if ($this->routeParams !== null) {
-            throw new RuntimeException('Route parameters can only be set once.');
-        }
-        $this->routeParams = $params;
-        return $this;
-    }
-
-    /**
      * Get request URL query parameters
      */
     public function getQueryParam(?string $key = null, ?string $default = null): array|string|null
     {
         if ($key === null) {
-            return $this->req->get ?? [];
+            return $this->request->get ?? [];
         }
-        return $this->req->get[$key] ?? $default;
+        return $this->request->get[$key] ?? $default;
     }
 
     /**
@@ -188,7 +188,7 @@ class HttpContext
      */
     public function getQueryString(): ?string
     {
-        return $this->req->server['query_string'] ?? null;
+        return $this->request->server['query_string'] ?? null;
     }
 
     /**
@@ -197,9 +197,9 @@ class HttpContext
     public function getPostParam(?string $key = null): array|string|null
     {
         if ($key === null) {
-            return $this->req->post ?? [];
+            return $this->request->post ?? [];
         }
-        return $this->req->post[$key] ?? null;
+        return $this->request->post[$key] ?? null;
     }
 
     /**
@@ -208,9 +208,10 @@ class HttpContext
     public function getHeader(?string $key = null): array|string|null
     {
         if ($key === null) {
-            return $this->req->header ?? [];
+            return $this->request->header ?? [];
         }
-        return $this->req->header[$key] ?? null;
+        $key = \strtolower($key);
+        return $this->request->header[$key] ?? null;
     }
 
     /**
@@ -219,19 +220,20 @@ class HttpContext
     public function setHeader(string $key, string $value): self
     {
         $this->assertNotCommitted();
-        $this->res->header($key, $value);
+        $this->response->header($key, $value);
         return $this;
     }
 
     /**
      * Get response headers
      */
-    public function getResHeader(?string $key = null): array|string|null
+    public function getResponseHeader(?string $key = null): array|string|null
     {
         if ($key === null) {
-            return $this->res->header ?? [];
+            return $this->response->header ?? [];
         }
-        return $this->res->header[$key] ?? null;
+        $key = \strtolower($key);
+        return $this->response->header[$key] ?? null;
     }
 
     /**
@@ -240,9 +242,9 @@ class HttpContext
     public function getUploadedFile(?string $key = null): ?array
     {
         if ($key === null) {
-            return $this->req->files ?? [];
+            return $this->request->files ?? [];
         }
-        return $this->req->files[$key] ?? null;
+        return $this->request->files[$key] ?? null;
     }
 
     /**
@@ -250,8 +252,8 @@ class HttpContext
      */
     public function write(string $data): self
     {
-        $this->isCommitted = true;
-        $this->res->write($data);
+        $this->committed = true;
+        $this->response->write(($this->writer)($data));
         return $this;
     }
 
@@ -260,28 +262,28 @@ class HttpContext
      */
     public function end(?string $data = null): self
     {
-        $this->isCommitted = true;
-        $this->res->end($data);
+        $this->committed = true;
+        $this->response->end(($this->writer)($data ?? ''));
         return $this;
     }
 
     /**
      * Close connection
      */
-    public function abortConnection(): self
+    public function abort(): self
     {
-        $this->srv->close($this->req->fd);
+        $this->server->close($this->request->fd);
         return $this;
     }
 
     /**
      * Send JSON response
      */
-    public function sendJson(mixed $data, ?int $status = null): self
+    public function json(mixed $data, ?int $status = null): self
     {
         $this->setHeader('Content-Type', 'application/json; charset=utf-8');
         if ($status !== null) {
-            $this->setStatus($status);
+            $this->status($status);
         }
         return $this->end(\json_encode($data));
     }
@@ -289,11 +291,11 @@ class HttpContext
     /**
      * Send HTML response
      */
-    public function sendHtml(string $html, ?int $status = null): self
+    public function html(string $html, ?int $status = null): self
     {
         $this->setHeader('Content-Type', 'text/html; charset=utf-8');
         if ($status !== null) {
-            $this->setStatus($status);
+            $this->status($status);
         }
         return $this->end($html);
     }
@@ -301,11 +303,11 @@ class HttpContext
     /**
      * Send plain text response
      */
-    public function sendText(string $text, ?int $status = null): self
+    public function text(string $text, ?int $status = null): self
     {
         $this->setHeader('Content-Type', 'text/plain; charset=utf-8');
         if ($status !== null) {
-            $this->setStatus($status);
+            $this->status($status);
         }
         return $this->end($text);
     }
@@ -313,62 +315,76 @@ class HttpContext
     /**
      * Send redirect response
      */
-    public function sendRedirect(string $url, int $status = 302): self
+    public function redirect(string $url, int $status = 302): self
     {
         $this->setHeader('Location', $url);
-        $this->setStatus($status);
+        $this->status($status);
         return $this->end();
     }
 
     /**
-     * Send file response
+     * Send a file response to the client.
+     *
+     * @param string $baseDir The base directory for file resolution
+     * @param string $filePath The relative file path to serve
+     * @param bool $download Whether to force download (Content-Disposition: attachment)
+     * @param string|null $downloadName The filename to use for download (optional)
      */
-    public function sendFile(string $baseDir, string $filePath): self
+    public function file(string $baseDir, string $filePath, bool $download = false, ?string $downloadName = null): self
     {
         $this->assertNotCommitted();
-        $fullPath = $this->getResolvedFilePath($baseDir, $filePath);
-        if ($fullPath) {
-            $this->res->sendfile($fullPath);
-            return $this;
-        }
-        return $this->sendText('File not found', 404);
-    }
+        $this->committed = true;
 
-    /**
-     * Send download response
-     */
-    public function sendDownload(string $baseDir, string $filePath, ?string $downloadName = null): self
-    {
-        $this->assertNotCommitted();
         $fullPath = $this->getResolvedFilePath($baseDir, $filePath);
-        if ($fullPath) {
-            $fileName = \rawurlencode($downloadName ?? \basename($filePath));
-            $this->setHeader('Content-Type', 'application/octet-stream');
-            $this->setHeader('Content-Transfer-Encoding', 'binary');
-            $this->setHeader('Content-Disposition', "attachment; filename=\"{$fileName}\"");
-            $this->res->sendfile($fullPath);
-            return $this;
+        if (!$fullPath) {
+            return $this->text('File not found', 404);
         }
-        return $this->sendText('File not found', 404);
+
+        if ($download) {
+            $fileName = \rawurlencode($downloadName ?? \basename($fullPath));
+            $this->setHeader('Content-Type', 'application/octet-stream');
+            $this->setHeader('Content-Disposition', "attachment; filename=\"{$fileName}\"");
+        } else {
+            $finfo  = \finfo_open(FILEINFO_MIME_TYPE);
+            $contentType = \finfo_file($finfo, $fullPath);
+            \finfo_close($finfo);
+            $this->setHeader('Content-Type', $contentType);
+        }
+
+        $fileSize = (string)\filesize($fullPath);
+        $this->setHeader('Content-Length', $fileSize);
+
+        $resource = \fopen($fullPath, 'rb');
+        $chunkSize = 16384;
+        while (!\feof($resource)) {
+            $data = \fread($resource, $chunkSize);
+            if ($data === false || $data === '') {
+                break;
+            }
+            $this->write($data);
+        }
+        \fclose($resource);
+        $this->response->end();
+        return $this;
     }
 
     /**
      * Set response status code
      */
-    public function setStatus(int $code): self
+    public function status(int $code): self
     {
         $this->assertNotCommitted();
-        $this->res->status($code);
-        $this->statusCode = $code;
+        $this->response->status($code);
+        $this->status = $code;
         return $this;
     }
 
     /**
      * Get response status code
      */
-    public function getStatus(): int
+    public function responseStatus(): int
     {
-        return $this->statusCode;
+        return $this->status;
     }
 
     /**
@@ -376,8 +392,7 @@ class HttpContext
      */
     public function isConnected(): bool
     {
-        // TODO: ensure this works with HTTP/2 reused connections
-        return $this->srv->exist($this->req->fd);
+        return $this->response->isWritable();
     }
 
     /**
@@ -385,30 +400,7 @@ class HttpContext
      */
     public function isCommitted(): bool
     {
-        return $this->isCommitted;
-    }
-
-    /**
-     * Run a background task
-     */
-    public function dispatchTask(string $name, mixed $payload): void
-    {
-        $this->srv->task(['name' => $name, 'payload' => $payload]);
-    }
-
-    /**
-     * Run a background task and await its result
-     * 
-     * @throws RuntimeException if the task times out
-     */
-    public function awaitTask(string $name, mixed $payload, float $timeout = 4): mixed
-    {
-        $data = $this->srv->taskCo([['name' => $name, 'payload' => $payload]], $timeout);
-
-        if ($data[0] === false) {
-            throw new RuntimeException("Task '$name' timed out after {$timeout} seconds.");
-        }
-        return $data[0] ?? null;
+        return $this->committed;
     }
 
     /**
@@ -418,7 +410,7 @@ class HttpContext
      */
     private function assertNotCommitted(): void
     {
-        if ($this->isCommitted) {
+        if ($this->committed) {
             throw new RuntimeException('Cannot modify response after it has been sent');
         }
     }

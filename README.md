@@ -1,65 +1,18 @@
 # Swoldier
 
-Swoldier is a minimal micro-framework built on top of Swoole for building high-performance PHP applications.
-
-### Basic Architecture
-
-Swoldier applications operate with two types of workers:
-
-* HTTP Workers: These handle incoming HTTP requests and should be kept lean to maximize cache efficiency and response speed.
-* Task Workers: Designed to offload any non-HTTP or long-running tasks, ensuring that HTTP workers remain responsive and performant.
-
-![Swoole-Diagram](./assets/swoole-architecture.svg)
-
+Swoldier is a minimal micro-framework built on top of Swoole for building high-performance PHP applications. It's essentially just a router with middleware support making use of a custom HTTP context class to manage requests and responses.
 
 ## Usage
 
 Below is a usage example to get your started.
 
 ```PHP
-<?php
 
-require __DIR__ . '/vendor/autoload.php';
-
-use Swoldier\{App, BatchLogger, Event, Http\HttpContext};
-use Swoldier\Middleware\RequestLogger;
-
-// Create the application instance
-$app = new App(
-    port: 8082,
-    httpWorkers: 2,
-    taskWorkers: 1
-);
-
-// Create a logger instance
-$logger = new BatchLogger();
-
-// Register middleware and logger for each worker
-$app->on(Event::WorkerStart, function ($workerId) use (&$logger, $app) {
-    $workerLogger = $logger->withSettings(channel: "worker-{$workerId}");
-    $app->use(new RequestLogger(logger: $workerLogger));
-});
-
-// Register a task handler
-$app->task('testTask', function (string $data) {
-    // Simulate some background work
-    return strtoupper($data);
-});
-
-// Define a route handler
-$app->get('/', function (HttpContext $ctx) {
-    // Run a task and wait for the result
-    $result = $ctx->awaitTask('testTask', ['test']);
-
-    // Send the result in the response
-    $ctx->end("Task result: $result");
-});
-
-// Log server startup
-$app->run(function ($host, $port) use (&$logger) {
-    $logger->info("Server running at http://{$host}:{$port}/");
-});
 ```
+
+### Routing
+
+
 
 ## Links
 

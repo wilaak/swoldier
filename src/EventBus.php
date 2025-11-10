@@ -4,16 +4,13 @@ declare(strict_types=1);
 
 namespace Swoldier;
 
-/**
- * Simple event-bus implementation
- */
 class EventBus
 {
     private array $listeners = [];
     private array $wildcardListeners = [];
 
     /**
-     * Emit an event.
+     * Emit an event. (e.g. 'user.created')
      */
     public function emit(string $event, mixed $payload = null): void
     {
@@ -32,7 +29,7 @@ class EventBus
     }
 
     /**
-     * Subscribe to an event or wildcard.
+     * Subscribe to an event or wildcard. (e.g. 'user.*' or '*')
      *
      * @return callable Unsubscribe function
      */
@@ -58,7 +55,7 @@ class EventBus
     }
 
     /**
-     * Run once for an event or wildcard (e.g. 'user.*' or '*')
+     * Run once for an event or wildcard. (e.g. 'user.*' or '*')
      */
     public function once(string $event, callable $listener): void
     {

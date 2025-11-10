@@ -3,44 +3,42 @@
 
 require __DIR__ . '/vendor/autoload.php';
 
-use Swoldier\{App, BatchLogger, Event, Http\HttpContext};
-use Swoldier\Middleware\RequestLogger;
+use Swoldier\HttpContext;
 
-// Create the application instance
-$app = new App(
-    port: 8082,
-    httpWorkers: 4,
-    taskWorkers: 2
-);
+$server = new Swoole\Http\Server('0.0.0.0', 8082, SWOOLE_PROCESS, SWOOLE_SOCK_TCP | SWOOLE_SSL);
 
-// Create a logger instance
-$logger = new BatchLogger(
-    logFilePath: __DIR__ . '/server.log',
-);
+$server->set([
+    'ssl_cert_file' => __DIR__ . '/../gui-test/cert.pem',
+    'ssl_key_file' => __DIR__ . '/../gui-test/key.pem',
+    'worker_num' => 1,
+    'enable_reuse_port' => true,
+    'open_cpu_affinity' => true,
+    'max_wait_time' => 0,
+    'open_http2_protocol' => true
+]);
 
-$app->on(Event::WorkerStart, function ($workerId) use (&$logger, $app) {
-    $logger = $logger->withSettings(channel: "worker-{$workerId}");
-    $app->use(
-        new RequestLogger($logger)
-    );
+$router = new Swoldier\Router($server);
+
+$brotli = new Swoldier\Middleware\Brotli(level: 4);
+
+$router->use($brotli);
+
+$router->map('GET', '/:file+', function (HttpContext $ctx) {
+    $file = $ctx->routeParam('file');
+    $ctx->file(__DIR__ . '/public/', $file);
+
 });
 
-
-
-// Register a task handler
-$app->task('testTask', function (string $data) {
-    // Simulate some background work
-    return strtoupper($data);
+$router->map('GET', '/', function (HttpContext $ctx) {
+    $ctx->html('<h1>Hello, World!</h1>');
 });
 
-// Define a route handler
-$app->get('/', function (HttpContext $ctx) {
-    // Run a task and wait for the result
-    $result = $ctx->awaitTask('testTask', ['test'], 1);
-    $ctx->end("Task result: $result");
+$router->map('get', '/test', function (HttpContext $ctx) {
+    while ($ctx->connected()) {
+        $ctx->write("data: " . date('Y-m-d H:i:s') . "\n\n");
+        fwrite(STDOUT, "Sent data to client\n");
+        Swoole\Coroutine\System::sleep(1);
+    }
 });
 
-// Log server startup
-$app->run(function ($host, $port) use ($logger) {
-    $logger->info("Server running at http://{$host}:{$port}/");
-});
+$server->start();
