@@ -393,6 +393,11 @@ class HttpContext
      */
     public function isConnected(): bool
     {
+        if ($this->getScheme() !== 'https') {
+            // For HTTP connections we must check if the connection still exists
+            return $this->server->exist($this->request->fd);
+        }
+        // For HTTPS connections, we can only check if the response is writable
         return $this->response->isWritable();
     }
 
