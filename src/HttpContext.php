@@ -33,7 +33,7 @@ class HttpContext
     private bool $committed = false;
 
     /**
-     * Whether the last write was successful (connection still open) 
+     * Whether the last write was successful (connection still open)
      */
     public bool $connected = true;
 
@@ -254,84 +254,96 @@ class HttpContext
 
     /**
      * Write data to the response buffer
-     * 
+     *
      * @return bool Whether the write was successful (connection still open)
      */
     public function write(string $data): bool
     {
         $this->committed = true;
-        $this->connected = $this->response->write(($this->writer)($data));
+        $output = ($this->writer)($data);
+        if ($output === '' || $output === null) {
+            return $this->connected;
+        }
+        $this->connected = $this->response->write($output);
         return $this->connected;
     }
 
     /**
      * End response
-     * 
+     *
      * @param string|null $data Optional data to write before ending
      */
-    public function end(?string $data = null): void
+    public function end(?string $data = null): self
     {
         $this->committed = true;
         $this->connected = false;
         if ($data === null) {
             $this->response->end();
+            return $this;
         }
-        $this->response->end(($this->writer)($data));
+        $output = ($this->writer)($data);
+        if ($output === '' || $output === null) {
+            $this->response->end();
+            return $this;
+        }
+        $this->response->end($output);
+        return $this;
     }
 
     /**
      * Close connection at the TCP level
      */
-    public function abort(): void
+    public function abort(): self
     {
         $this->server->close($this->request->fd);
         $this->connected = false;
+        return $this;
     }
 
     /**
      * Send JSON response
      */
-    public function json(mixed $data, ?int $status = null): void
+    public function json(mixed $data, ?int $status = null): self
     {
         $this->setHeader('Content-Type', 'application/json; charset=utf-8');
         if ($status !== null) {
             $this->setStatus($status);
         }
-        $this->end(\json_encode($data));
+        return $this->end(\json_encode($data));
     }
 
     /**
      * Send HTML response
      */
-    public function html(string $html, ?int $status = null): void 
+    public function html(string $html, ?int $status = null): self
     {
         $this->setHeader('Content-Type', 'text/html; charset=utf-8');
         if ($status !== null) {
             $this->setStatus($status);
         }
-        $this->end($html);
+        return $this->end($html);
     }
 
     /**
      * Send plain text response
      */
-    public function text(string $text, ?int $status = null): void
+    public function text(string $text, ?int $status = null): self
     {
         $this->setHeader('Content-Type', 'text/plain; charset=utf-8');
         if ($status !== null) {
             $this->setStatus($status);
         }
-        $this->end($text);
+        return $this->end($text);
     }
 
     /**
      * Send redirect response
      */
-    public function redirect(string $url, int $status = 302): void
+    public function redirect(string $url, int $status = 302): self
     {
         $this->setHeader('Location', $url);
         $this->setStatus($status);
-        $this->end();
+        return $this->end();
     }
 
     /**
@@ -342,14 +354,13 @@ class HttpContext
      * @param bool $download Whether to force download (Content-Disposition: attachment)
      * @param string|null $downloadName The filename to use for download (optional)
      */
-    public function file(string $baseDir, string $filePath, bool $download = false, ?string $downloadName = null): void
+    public function file(string $baseDir, string $filePath, bool $download = false, ?string $downloadName = null): self
     {
         $this->assertNotCommitted();
 
         $fullPath = $this->getResolvedFilePath($baseDir, $filePath);
         if (!$fullPath) {
-            $this->text('File not found', 404);
-            return;
+            return $this->text('File not found', 404);
         }
 
         if ($download) {
@@ -374,7 +385,7 @@ class HttpContext
             $this->write($data);
         }
         \fclose($resource);
-        $this->end();
+        return $this->end();
     }
 
     /**

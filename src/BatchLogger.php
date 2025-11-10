@@ -46,28 +46,6 @@ class BatchLogger implements LoggerInterface
     ) {
     }
 
-    /**
-     * Create a new logger with modified settings.
-     *
-     * @param string $channel Log channel name
-     * @param string|null $stdoutLogLevel Minimum log level for stdout
-     * @param string|null $fileLogLevel Minimum log level for file logging
-     */
-    public function withSettings(
-        string $channel = 'app',
-        ?string $stdoutLogLevel = null,
-        ?string $fileLogLevel = null
-    ): self {
-        return new self(
-            channel: $channel,
-            flushDelayMs: $this->flushDelayMs,
-            useColors: $this->useColors,
-            stdoutLogLevel: $stdoutLogLevel ?? $this->stdoutLogLevel,
-            logFilePath: $this->logFilePath,
-            fileLogLevel: $fileLogLevel ?? $this->fileLogLevel,
-        );
-    }
-
     public function emergency($message, array $context = []): void
     {
         $this->log(LogLevel::EMERGENCY, $message, $context);
@@ -120,32 +98,31 @@ class BatchLogger implements LoggerInterface
      */
     public function flush(): void
     {
-        if (!empty($this->batchedLogEntries)) {
-            $stdoutLines = [];
-            $fileLines = [];
-            foreach ($this->batchedLogEntries as $entry) {
-                $message = $entry['message'];
-                $context = $entry['context'];
-                $level   = $entry['level'];
+        $stdoutLines = [];
+        $fileLines = [];
+        foreach ($this->batchedLogEntries as $entry) {
+            $message = $entry['message'];
+            $context = $entry['context'];
+            $level   = $entry['level'];
 
-                $stdout = $this->formatStdout($level, $this->interpolate($message, $context), $this->useColors);
+            $stdout = $this->formatStdout($level, $this->interpolate($message, $context), $this->useColors);
 
-                $stdoutLines[] = $stdout;
-                if ($this->logFilePath && $this->levelCompare($entry['level'], $this->fileLogLevel) >= 0) {
-                    $file = $this->formatFile($level, $message, $context);
-                    $fileLines[] = $file;
-                }
+            $stdoutLines[] = $stdout;
+            if ($this->logFilePath && $this->levelCompare($entry['level'], $this->fileLogLevel) >= 0) {
+                $file = $this->formatFile($level, $message, $context);
+                $fileLines[] = $file;
             }
-            if ($stdoutLines) {
-                $output = \implode(PHP_EOL, $stdoutLines) . PHP_EOL;
-                \fwrite(STDOUT, $output);
-            }
-            if ($fileLines && $this->logFilePath) {
-                $fileOutput = \implode(PHP_EOL, $fileLines) . PHP_EOL;
-                \file_put_contents($this->logFilePath, $fileOutput, FILE_APPEND | LOCK_EX);
-            }
-            $this->batchedLogEntries = [];
         }
+        if ($stdoutLines) {
+            $output = \implode(PHP_EOL, $stdoutLines) . PHP_EOL;
+            \fwrite(STDOUT, $output);
+        }
+        if ($fileLines && $this->logFilePath) {
+            $fileOutput = \implode(PHP_EOL, $fileLines) . PHP_EOL;
+            \file_put_contents($this->logFilePath, $fileOutput, FILE_APPEND | LOCK_EX);
+        }
+        $this->batchedLogEntries = [];
+
         if ($this->flushTimerId !== null) {
             Timer::clear($this->flushTimerId);
             $this->flushTimerId = null;
@@ -168,6 +145,7 @@ class BatchLogger implements LoggerInterface
     private function formatStdout(string $level, string $message, ?bool $useColors = null): string
     {
         $timestamp = \date('Y-m-d H:i:s');
+
         // Center the level string to 9 characters
         $levelRaw = \strtoupper($level);
         $levelLen = \strlen($levelRaw);
@@ -178,7 +156,6 @@ class BatchLogger implements LoggerInterface
         $channel = $this->channel;
 
         $baseFormat = '[%s] [%s] [%s] %s';
-
         if (!$useColors) {
             return \sprintf($baseFormat, $timestamp, $levelStr, $channel, $message);
         }

@@ -4,12 +4,6 @@ Micro-framework built on top of Swoole for building fast real-time web applicati
 
 In essence, Swoldier is just a router with middleware support, leveraging a custom HTTP context abstraction to make it more convenient to work with Swoole's HTTP server.
 
-### Overview
-
-- Streaming-friendly request and response context ideal for real-time applications
-- Built-in middleware for logging, rate limiting, connection limiting, and Brotli compression
-- Simple and efficient routing utilizing a radix tree algorithm
-
 ## Install
 
 You can install Swoldier via Composer:
@@ -112,6 +106,8 @@ $server->start();
 
 ## Routing
 
+The `map` method allows you to define routes for different HTTP methods and patterns.
+
 > [!TIP]    
 > See the [RadixRouter](https://github.com/wilaak/radix-router) documentation for more details on the routing capabilities.
 
@@ -135,7 +131,7 @@ $router->map('*', '/all-methods', function (HttpContext $ctx) {
 
 ### Middleware
 
-The use method allows you to register a global middleware that will be executed for every incoming request.
+The `use` method allows you to register a global middleware that will be executed for every incoming request.
 
 ```php
 use Swoldier\Middleware\RequestLogger;
@@ -144,16 +140,13 @@ $requestLogger = new RequestLogger($logger);
 $router->use($requestLogger);
 ```
 
-The group method allows you to create a group of routes that share the same middleware.
+The `group` method allows you to create a group of routes that share the same middleware.
 
 ```php
 use Swoldier\HttpContext;
 
-// Custom middleware as a closure
 $middleware = function (HttpContext $ctx, callable $next) {
-    // Do something before
     $next($ctx);
-    // Do something after
 };
 
 $group = $router->group($middleware);
@@ -164,8 +157,6 @@ $group->map('GET', '/grouped', function (HttpContext $ctx) {
 ```
 
 ## Enabling HTTPS
-
-To enable HTTPS and HTTP/2 support, you need to provide the SSL certificate and key files when creating the Swoole HTTP server instance.
 
 To generate a self-signed certificate for testing purposes, you can use the following OpenSSL command:
 

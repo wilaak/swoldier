@@ -161,10 +161,11 @@ class Router
             // Handle HEAD requests for existing GET routes
             if ($method === 'HEAD') {
                 $headResult = $this->router->lookup('GET', $decodedPath);
-                // If a GET route exists at this path, respond with headers only
-                $ctx->setWriter(fn ($data) => null); // Disable body for HEAD
-                $headResult['handler']($ctx);
+
                 if ($headResult['code'] === 200) {
+                    // If a GET route exists at this path, respond with headers only
+                    $ctx->setWriter(fn (string $data) => null); // Disable writing body
+                    $headResult['handler']($ctx);
                     return $ctx->end();
                 }
             }
