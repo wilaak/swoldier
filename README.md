@@ -179,7 +179,9 @@ $group->map('GET', '/grouped', function (HttpContext $ctx) {
 });
 ```
 
-## Compression Middleware
+## Compression
+
+The following compression middlewares are available to compress HTTP responses.
 
 ### Brotli
 

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace FatGui;
+namespace Swoldier\Middleware;
 
 use Swoldier\HttpContext;
 
