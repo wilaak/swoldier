@@ -14,14 +14,16 @@ class RequestLogger
     /**
      * @param LoggerInterface $logger PSR-3 compatible logger instance
      */
-    public function __construct(private LoggerInterface $logger) {}
+    public function __construct(private LoggerInterface $logger)
+    {
+    }
 
     public function __invoke(HttpContext $ctx, callable $next)
     {
         $method = $ctx->getMethod();
         $uri = $ctx->getUri();
         $ip = $ctx->getIp();
-        $agent = $ctx->getHeader('user-agent') ?? '-';
+        $agent = $ctx->getHeader('user-agent') ?? '';
 
         $this->logger->info("{ip} {method} {uri} - {agent}", [
             'ip' => $ip,
@@ -38,9 +40,9 @@ class RequestLogger
                 'ip' => $ip,
                 'method' => $method,
                 'uri' => $uri,
+                'agent' => $agent,
                 'message' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
-                'agent' => $agent,
             ]);
             return;
         }

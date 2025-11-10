@@ -10,9 +10,9 @@ class BrotliCompression
 {
     /**
      * Brotli Compression Middleware
-     * 
+     *
      * Enables Brotli compression for HTTP responses when the client supports it.
-     * 
+     *
      * @param int $level Compression level (0-11)
      */
     public function __construct(
@@ -23,7 +23,7 @@ class BrotliCompression
     public function __invoke(HttpContext $ctx, callable $next): void
     {
         if (!\function_exists('brotli_compress_init')) {
-            fwrite(STDERR, "Brotli extension is not installed. Skipping Brotli compression middleware.\n");
+            \fwrite(STDERR, "Brotli extension is not installed. Skipping Brotli compression middleware.\n");
             $next($ctx);
             return;
         }

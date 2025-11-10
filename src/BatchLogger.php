@@ -17,12 +17,12 @@ class BatchLogger implements LoggerInterface
     /**
      * Create a new BatchLogger instance.
      *
-     * @param string      $channel         Log channel name (e.g., 'app', 'http', 'worker')
-     * @param int         $flushDelayMs    Delay in milliseconds before flushing the log batch to output
-     * @param bool        $useColors       Whether to use colored output in stdout (for terminals)
-     * @param string      $stdoutLogLevel  Minimum log level for messages to appear in stdout (e.g., LogLevel::INFO)
-     * @param string|null $logFilePath     Path to log file, or null to disable file logging
-     * @param string      $fileLogLevel    Minimum log level for messages to be written to the log file
+     * @param string $channel Log channel name (e.g., 'app', 'http', 'worker')
+     * @param int $flushDelayMs Delay in milliseconds before flushing the log batch to output
+     * @param bool $useColors Whether to use colored output in stdout (for terminals)
+     * @param string $stdoutLogLevel Minimum log level for messages to appear in stdout (e.g., LogLevel::INFO)
+     * @param string|null $logFilePath Path to log file, or null to disable file logging
+     * @param string $fileLogLevel Minimum log level for messages to be written to the log file
      *
      * Example:
      * ```php
@@ -43,7 +43,8 @@ class BatchLogger implements LoggerInterface
         private string $stdoutLogLevel = LogLevel::INFO,
         private ?string $logFilePath = null,
         private string $fileLogLevel = LogLevel::INFO,
-    ) {}
+    ) {
+    }
 
     /**
      * Create a new logger with modified settings.

@@ -19,7 +19,10 @@
     "autoload": {
         "psr-4": {
             "Swoldier\\": "src/"
-        }
+        },
+        "files": [
+            "src/functions.php"
+        ]
     },
     "homepage": "https://github.com/wilaak/swoldier",
     "support": {

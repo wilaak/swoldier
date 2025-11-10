@@ -348,9 +348,7 @@ class HttpContext
             $this->setHeader('Content-Type', 'application/octet-stream');
             $this->setHeader('Content-Disposition', "attachment; filename=\"{$fileName}\"");
         } else {
-            $finfo  = \finfo_open(FILEINFO_MIME_TYPE);
-            $contentType = \finfo_file($finfo, $fullPath);
-            \finfo_close($finfo);
+            $contentType = getMimeType($fullPath);
             $this->setHeader('Content-Type', $contentType);
         }
 

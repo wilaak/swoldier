@@ -12,7 +12,7 @@ use Closure, Throwable;
 
 /**
  * Swoldier micro-framework
- * 
+ *
  * @license WTFPL-2
  * @link https://github.com/wilaak/swoldier
  */
@@ -40,7 +40,7 @@ class Router
 
     /**
      * Create a new Router instance.
-     * 
+     *
      * @param Server $server The Swoole HTTP server instance
      * @param array $trustedProxies List of trusted proxy IP addresses for client IP resolution
      */
@@ -49,7 +49,7 @@ class Router
         public array $trustedProxies = ['127.0.0.1', '::1']
     ) {
         $this->router = new RadixRouter();
-        $this->pipeline = fn(HttpContext $ctx, callable $next) => $next($ctx);
+        $this->pipeline = fn (HttpContext $ctx, callable $next) => $next($ctx);
 
         $server->on('Request', function (Request $request, Response $response) use (&$server) {
             $this->handleRequest($request, $response);
@@ -78,7 +78,7 @@ class Router
     public function map(string|array $methods, string $pattern, callable $handler): self
     {
         $middleware = self::buildMiddlewarePipeline($this->groupMiddleware);
-        $this->router->add($methods, $pattern, fn(HttpContext $ctx) => $middleware($ctx, $handler));
+        $this->router->add($methods, $pattern, fn (HttpContext $ctx) => $middleware($ctx, $handler));
         return $this;
     }
 
@@ -128,7 +128,7 @@ class Router
         );
 
         // Execute the middleware pipeline
-        ($this->pipeline)($ctx, fn(HttpContext $ctx) => $this->dispatchRoute(
+        ($this->pipeline)($ctx, fn (HttpContext $ctx) => $this->dispatchRoute(
             $ctx,
             $result,
             $method,
@@ -162,7 +162,7 @@ class Router
             if ($method === 'HEAD') {
                 $headResult = $this->router->lookup('GET', $decodedPath);
                 // If a GET route exists at this path, respond with headers only
-                $ctx->setWriter(fn($data) => null); // Disable body for HEAD
+                $ctx->setWriter(fn ($data) => null); // Disable body for HEAD
                 $headResult['handler']($ctx);
                 if ($headResult['code'] === 200) {
                     return $ctx->end();
@@ -192,7 +192,7 @@ class Router
         return function (HttpContext $ctx, callable $finalHandler) use ($middlewares) {
             $handler = $finalHandler;
             foreach (\array_reverse($middlewares) as $middleware) {
-                $handler = fn(HttpContext $ctx) => $middleware($ctx, $handler);
+                $handler = fn (HttpContext $ctx) => $middleware($ctx, $handler);
             }
             return $handler($ctx);
         };

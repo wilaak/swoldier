@@ -23,14 +23,14 @@ class RateLimiter
      *
      * Supports per-IP, global, or custom (user-defined) rate limiting scopes.
      *
-     * @param int $maxRequests               Maximum requests allowed within the time window
-     * @param int $timeWindow                Time window in seconds for rate limiting
-     * @param string $scope                  Rate limiting scope ('ip', 'global', 'custom')
-     * @param LoggerInterface|null $logger   Optional PSR-3 logger for rate limit warnings
+     * @param int $maxRequests Maximum requests allowed within the time window
+     * @param int $timeWindow Time window in seconds for rate limiting
+     * @param string $scope Rate limiting scope ('ip', 'global', 'custom')
+     * @param LoggerInterface|null $logger Optional PSR-3 logger for rate limit warnings
      * @param callable|null $onLimitExceeded Optional callback when limit is exceeded.
-     * @param callable|null $keyResolver     Custom key resolver for 'custom' scope.
-     * @param int $tableSize                 Size of the Swoole table
-     * 
+     * @param callable|null $keyResolver Custom key resolver for 'custom' scope.
+     * @param int $tableSize Size of the Swoole table
+     *
      * Usage examples:
      * ```php
      * // Per-IP rate limiting (default)
@@ -63,7 +63,7 @@ class RateLimiter
         ?callable $keyResolver = null,
         int $tableSize = 65536
     ) {
-        if (!in_array($scope, ['ip', 'global', 'custom'], true)) {
+        if (!\in_array($scope, ['ip', 'global', 'custom'], true)) {
             throw new InvalidArgumentException("Invalid scope '$scope'. Must be 'ip', 'global', or 'custom'.");
         }
         if (isset($keyResolver)) {

@@ -25,12 +25,12 @@ class ConnectionLimiter
      *
      * Support per-IP, global, or custom (user-defined) connection limiting scopes.
      *
-     * @param int $maxConnections            Maximum concurrent connections
-     * @param string $scope                  Limiting scope: 'ip', 'global', or 'custom'
-     * @param LoggerInterface|null $logger   Optional PSR-3 logger for limit events
+     * @param int $maxConnections Maximum concurrent connections
+     * @param string $scope Limiting scope: 'ip', 'global', or 'custom'
+     * @param LoggerInterface|null $logger Optional PSR-3 logger for limit events
      * @param callable|null $onLimitExceeded Callback when limit is exceeded. function(HttpContext $ctx): void
-     * @param callable|null $keyResolver     Custom key resolver for 'custom' scope. function(HttpContext $ctx): string
-     * @param int $tableSize                 Swoole table size (default 65536, or 1 for 'global')
+     * @param callable|null $keyResolver Custom key resolver for 'custom' scope. function(HttpContext $ctx): string
+     * @param int $tableSize Swoole table size (default 65536, or 1 for 'global')
      *
      * Usage examples:
      * ```php
@@ -62,7 +62,7 @@ class ConnectionLimiter
         ?callable $keyResolver = null,
         int $tableSize = 65536,
     ) {
-        if (!in_array($scope, ['ip', 'global', 'custom'], true)) {
+        if (!\in_array($scope, ['ip', 'global', 'custom'], true)) {
             throw new InvalidArgumentException("Invalid scope '$scope'. Must be 'ip', 'global', or 'custom'.");
         }
         if (isset($onLimitExceeded)) {
