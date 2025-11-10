@@ -179,24 +179,14 @@ $group->map('GET', '/grouped', function (HttpContext $ctx) {
 });
 ```
 
-## Datastar Integration
+## Compression Middleware
 
-See [Datastar Swoldier](https://github.com/wilaak/datastar-swoldier)
+### Brotli
 
-## Brotli Compression
-
-To enable Brotli compression for responses, you can use the built-in `BrotliCompression` middleware.
+To enable Brotli compression for responses, you can use the included `BrotliCompression` middleware.
 
 > [!NOTE]   
 > Brotli compression requires the `brotli` PHP extension to be installed and enabled. See [Brotli PHP Extension](https://github.com/kjdev/php-ext-brotli).
-
-To install the extension using PECL, run the following command:
-
-```bash
-pecl install brotli
-```
-
-Then, you can add the `BrotliCompression` middleware to your router as shown below:
 
 ```php
 use Swoldier\Middleware\BrotliCompression;
@@ -207,6 +197,29 @@ $brotliCompression = new BrotliCompression(
 
 $router->use($brotliCompression);
 ```
+
+### Zstd
+
+To enable Zstd compression for responses, you can use the included `ZstdCompression` middleware.
+
+This is significantly faster than Brotli while providing comparable compression ratios. But it is not as widely supported by browsers.
+
+> [!NOTE]   
+> Zstd compression requires the `zstd` PHP extension to be installed and enabled. See [Zstd PHP Extension](https://github.com/kjdev/php-ext-zstd).
+
+```php
+use Swoldier\Middleware\ZstdCompression;
+
+$zstdCompression = new ZstdCompression(
+    level: 3, // Compression level (1-22)
+);
+
+$router->use($zstdCompression);
+```
+
+## Datastar
+
+See [Datastar Swoldier](https://github.com/wilaak/datastar-swoldier)
 
 ## Links
 
