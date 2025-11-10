@@ -35,7 +35,9 @@ class RequestLogger
         try {
             $next($ctx);
         } catch (Throwable $e) {
-            $ctx->text('Internal Server Error', 500);
+            if (!$ctx->isCommitted()) {
+                $ctx->text('Internal Server Error', 500);
+            }
             $this->logger->error("{ip} {method} {uri} - {message}\n{trace}", [
                 'ip' => $ip,
                 'method' => $method,
@@ -44,7 +46,6 @@ class RequestLogger
                 'message' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
-            return;
         }
     }
 }
