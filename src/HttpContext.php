@@ -358,7 +358,7 @@ class HttpContext
     {
         $this->assertNotCommitted();
 
-        $fullPath = $this->getResolvedFilePath($baseDir, $filePath);
+        $fullPath = $this->resolveSafeFilePath($baseDir, $filePath);
         if (!$fullPath) {
             return $this->text('File not found', 404);
         }
@@ -449,7 +449,7 @@ class HttpContext
     /**
      * Ensure that the resolved file is within the specified base directory and exists.
      */
-    private function getResolvedFilePath(string $baseDir, string $filePath): ?string
+    private function resolveSafeFilePath(string $baseDir, string $filePath): ?string
     {
         $resolvedBaseDir = \realpath($baseDir);
         if ($resolvedBaseDir === false) {

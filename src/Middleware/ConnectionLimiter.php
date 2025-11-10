@@ -28,9 +28,9 @@ class ConnectionLimiter
      * @param int $maxConnections Maximum concurrent connections
      * @param string $scope Limiting scope: 'ip', 'global', or 'custom'
      * @param LoggerInterface|null $logger Optional PSR-3 logger for limit events
-     * @param callable|null $onLimitExceeded Callback when limit is exceeded. function(HttpContext $ctx): void
-     * @param callable|null $keyResolver Custom key resolver for 'custom' scope. function(HttpContext $ctx): string
-     * @param int $tableSize Swoole table size (default 65536, or 1 for 'global')
+     * @param callable|null $onLimitExceeded Callback when limit is exceeded.
+     * @param callable|null $keyResolver Custom key resolver for 'custom' scope.
+     * @param int $tableSize Swoole table size
      *
      * Usage examples:
      * ```php

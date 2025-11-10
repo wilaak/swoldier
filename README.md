@@ -1,8 +1,9 @@
-# Swoldier
+# Swoldier 🪖
 
-Micro-framework built on top of Swoole for building fast real-time web applications in PHP.
+> [!IMPORTANT]  
+> This is a baby project and may not be production ready.
 
-In essence, Swoldier is just a router with middleware support, leveraging a custom HTTP context abstraction to make it more convenient to work with Swoole's HTTP server.
+Swoole micro-framework for fast concurrent applications
 
 ## Install
 
@@ -12,7 +13,13 @@ You can install Swoldier via Composer:
 composer require wilaak/swoldier
 ```
 
-## Usage Example
+Since it relies on Swoole, make sure you have the Swoole extension installed.
+
+```bash
+pecl install swoole
+```
+
+## Get Started
 
 Below is a usage example to get your started.
 
@@ -38,8 +45,7 @@ $server->set([
     'max_wait_time' => 0,                     // Graceful shutdown time
 ]);
 
-// Enable Swoole coroutine hooks
-// This replaces blocking PHP built-in functions with coroutine-friendly versions
+// Replace blocking PHP functions with coroutine-friendly versions
 Swoole\Runtime::enableCoroutine();
 
 // Create logger instance
@@ -156,26 +162,9 @@ $group->map('GET', '/grouped', function (HttpContext $ctx) {
 });
 ```
 
-## Enabling HTTPS
+## Datastar Integration
 
-To generate a self-signed certificate for testing purposes, you can use the following OpenSSL command:
-
-```bash
-openssl req -x509 -newkey rsa:2048 -nodes -keyout key.pem -out cert.pem -days 365 -subj "/CN=localhost"
-```
-
-Then, modify the server creation code as follows:
-
-```php
-$server = new Swoole\Http\Server('0.0.0.0', 8082, SWOOLE_PROCESS, SWOOLE_SOCK_TCP | SWOOLE_SSL);
-$server->set([
-    'ssl_cert_file' => __DIR__ . '/cert.pem',
-    'ssl_key_file' => __DIR__ . '/key.pem',
-    'open_http2_protocol' => true,
-    'worker_num' => 1,
-    'max_wait_time' => 0,
-]);
-```
+See [Datastar Swoldier](https://github.com/wilaak/datastar-swoldier)
 
 ## Brotli Compression
 
