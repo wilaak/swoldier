@@ -114,13 +114,9 @@ $server->start();
 
 The `map` method allows you to define routes for different HTTP methods and patterns.
 
-> [!TIP]    
-> See the [RadixRouter](https://github.com/wilaak/radix-router) documentation for more details on the routing capabilities.
-
 ```php
-// Simple route with a route parameter
-$router->map('GET', '/hello/:name', function (HttpContext $ctx) {
-    $name = $ctx->getRouteParam('name');
+// Simple GET route
+$router->map('GET', '/hello', function (HttpContext $ctx) {
     // ...
 });
 
@@ -130,9 +126,44 @@ $router->map(['GET', 'POST'], '/form', function (HttpContext $ctx) {
 });
 
 // Route for all methods
-$router->map('*', '/all-methods', function (HttpContext $ctx) {
+$router->map('*', '/catcher', function (HttpContext $ctx) {
     // ...
 });
+
+// Required parameter
+$router->map('GET', '/users/:id', function (HttpContext $ctx) {
+    // ...
+});
+// Example requests:
+//   /users     -> no match
+//   /users/123 -> ['id' => '123']
+
+// Optional parameters
+$router->map('GET', '/archive/:year?/:month?', function (HttpContext $ctx) {
+    // ...
+});
+// Example requests:
+//   /archive         -> [] (no parameters)
+//   /archive/1974    -> ['year' => '1974']
+//   /archive/1974/06 -> ['year' => '1974', 'month' => '06']
+
+// Wildcard parameter (one or more segments)
+$router->map('GET', '/files/:path+', function (HttpContext $ctx) {
+    // ...
+});
+// Example requests:
+//   /assets                -> no match
+//   /assets/logo.png       -> ['resource' => 'logo.png']
+//   /assets/img/banner.jpg -> ['resource' => 'img/banner.jpg']
+
+// Wildcard parameter (zero or more segments)
+$router->map('GET', '/files/:path*', function (HttpContext $ctx) {
+    // ...
+});
+// Example requests:
+//   /downloads               -> ['file' => ''] (empty string)
+//   /downloads/report.pdf    -> ['file' => 'report.pdf']
+//   /downloads/docs/guide.md -> ['file' => 'docs/guide.md']
 ```
 
 ### Middleware
