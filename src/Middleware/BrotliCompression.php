@@ -6,14 +6,13 @@ namespace Swoldier\Middleware;
 
 use Swoldier\HttpContext;
 
-/**
- * Brotli compression middleware.
- *
- * Requires the brotli PHP extension.
- */
-class Brotli
+class BrotliCompression
 {
     /**
+     * Brotli Compression Middleware
+     * 
+     * Enables Brotli compression for HTTP responses when the client supports it.
+     * 
      * @param int $level Compression level (0-11)
      */
     public function __construct(
@@ -23,7 +22,13 @@ class Brotli
 
     public function __invoke(HttpContext $ctx, callable $next): void
     {
-        $encoding = $ctx->header('accept-encoding') ?? '';
+        if (!\function_exists('brotli_compress_init')) {
+            fwrite(STDERR, "Brotli extension is not installed. Skipping Brotli compression middleware.\n");
+            $next($ctx);
+            return;
+        }
+
+        $encoding = $ctx->getHeader('accept-encoding') ?? '';
         if (\str_contains($encoding, 'br')) {
             $ctx->setHeader('content-encoding', 'br');
             $resource = \brotli_compress_init($this->level);

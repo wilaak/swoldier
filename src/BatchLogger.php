@@ -4,32 +4,37 @@ declare(strict_types=1);
 
 namespace Swoldier;
 
-use Psr\Log\LoggerInterface;
-use Psr\Log\LogLevel;
+use Psr\Log\{LoggerInterface, LogLevel};
+
 use Swoole\Timer;
 
-/**
- * Simple batch logger that buffers log entries and flushes them periodically for better performance.
- */
 class BatchLogger implements LoggerInterface
 {
-    /**
-     * @var array $batch Batched log entries to be flushed
-     */
-    private array $batch = [];
+    private array $batchedLogEntries = [];
 
-    /**
-     * @var int|null $flushTimerId Timer ID for scheduled flush, or null if none scheduled
-     */
     private ?int $flushTimerId = null;
 
     /**
-     * @param string $channel Log channel name
-     * @param int $flushDelayMs Delay in milliseconds before flushing the log batch
-     * @param bool $useColors Whether to use colored output in stdout
-     * @param string $stdoutLogLevel Minimum log level for stdout
-     * @param string|null $logFilePath Path to log file, or null to disable file logging
-     * @param string $fileLogLevel Minimum log level for file logging
+     * Create a new BatchLogger instance.
+     *
+     * @param string      $channel         Log channel name (e.g., 'app', 'http', 'worker')
+     * @param int         $flushDelayMs    Delay in milliseconds before flushing the log batch to output
+     * @param bool        $useColors       Whether to use colored output in stdout (for terminals)
+     * @param string      $stdoutLogLevel  Minimum log level for messages to appear in stdout (e.g., LogLevel::INFO)
+     * @param string|null $logFilePath     Path to log file, or null to disable file logging
+     * @param string      $fileLogLevel    Minimum log level for messages to be written to the log file
+     *
+     * Example:
+     * ```php
+     * $logger = new BatchLogger(
+     *     channel: 'http',
+     *     flushDelayMs: 100,
+     *     useColors: true,
+     *     stdoutLogLevel: LogLevel::INFO,
+     *     logFilePath: '/var/log/app.log',
+     *     fileLogLevel: LogLevel::WARNING
+     * );
+     * ```
      */
     public function __construct(
         private string $channel = 'app',
@@ -38,8 +43,7 @@ class BatchLogger implements LoggerInterface
         private string $stdoutLogLevel = LogLevel::INFO,
         private ?string $logFilePath = null,
         private string $fileLogLevel = LogLevel::INFO,
-    ) {
-    }
+    ) {}
 
     /**
      * Create a new logger with modified settings.
@@ -98,7 +102,7 @@ class BatchLogger implements LoggerInterface
 
     public function log($level, $message, array $context = []): void
     {
-        $this->batch[] = [
+        $this->batchedLogEntries[] = [
             'message' => $message,
             'context' => $context,
             'level' => $level,
@@ -111,14 +115,14 @@ class BatchLogger implements LoggerInterface
     }
 
     /**
-     * Flush the log batch to stdout and file if configured.
+     * Flush batched log entries to stdout and file if configured.
      */
     public function flush(): void
     {
-        if (!empty($this->batch)) {
+        if (!empty($this->batchedLogEntries)) {
             $stdoutLines = [];
             $fileLines = [];
-            foreach ($this->batch as $entry) {
+            foreach ($this->batchedLogEntries as $entry) {
                 $message = $entry['message'];
                 $context = $entry['context'];
                 $level   = $entry['level'];
@@ -139,7 +143,7 @@ class BatchLogger implements LoggerInterface
                 $fileOutput = \implode(PHP_EOL, $fileLines) . PHP_EOL;
                 \file_put_contents($this->logFilePath, $fileOutput, FILE_APPEND | LOCK_EX);
             }
-            $this->batch = [];
+            $this->batchedLogEntries = [];
         }
         if ($this->flushTimerId !== null) {
             Timer::clear($this->flushTimerId);
@@ -205,9 +209,6 @@ class BatchLogger implements LoggerInterface
         );
     }
 
-    /**
-     * Compare log levels for thresholding (returns >=0 if $level >= $threshold)
-     */
     private function levelCompare(string $level, string $threshold): int
     {
         $order = [
@@ -225,8 +226,6 @@ class BatchLogger implements LoggerInterface
 
     /**
      * Interpolate context values into the message placeholders.
-     *
-     * Example: "User {username} created" with ['username' => 'alice']
      */
     private function interpolate(string $message, array $context): string
     {

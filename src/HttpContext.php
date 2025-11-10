@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Swoldier;
 
-use Swoole\{Server, Http\Request, Http\Response};
+use Swoole\Http\{Server, Request, Response};
 
 use RuntimeException, Closure;
 
@@ -263,7 +263,11 @@ class HttpContext
     public function end(?string $data = null): self
     {
         $this->committed = true;
-        $this->response->end(($this->writer)($data ?? ''));
+        if ($data === null) {
+            $this->response->end();
+            return $this;
+        }
+        $this->response->end(($this->writer)($data));
         return $this;
     }
 
@@ -283,7 +287,7 @@ class HttpContext
     {
         $this->setHeader('Content-Type', 'application/json; charset=utf-8');
         if ($status !== null) {
-            $this->status($status);
+            $this->setStatus($status);
         }
         return $this->end(\json_encode($data));
     }
@@ -295,7 +299,7 @@ class HttpContext
     {
         $this->setHeader('Content-Type', 'text/html; charset=utf-8');
         if ($status !== null) {
-            $this->status($status);
+            $this->setStatus($status);
         }
         return $this->end($html);
     }
@@ -307,7 +311,7 @@ class HttpContext
     {
         $this->setHeader('Content-Type', 'text/plain; charset=utf-8');
         if ($status !== null) {
-            $this->status($status);
+            $this->setStatus($status);
         }
         return $this->end($text);
     }
@@ -318,7 +322,7 @@ class HttpContext
     public function redirect(string $url, int $status = 302): self
     {
         $this->setHeader('Location', $url);
-        $this->status($status);
+        $this->setStatus($status);
         return $this->end();
     }
 
@@ -333,7 +337,6 @@ class HttpContext
     public function file(string $baseDir, string $filePath, bool $download = false, ?string $downloadName = null): self
     {
         $this->assertNotCommitted();
-        $this->committed = true;
 
         $fullPath = $this->getResolvedFilePath($baseDir, $filePath);
         if (!$fullPath) {
@@ -364,14 +367,14 @@ class HttpContext
             $this->write($data);
         }
         \fclose($resource);
-        $this->response->end();
+        $this->end();
         return $this;
     }
 
     /**
      * Set response status code
      */
-    public function status(int $code): self
+    public function setStatus(int $code): self
     {
         $this->assertNotCommitted();
         $this->response->status($code);
@@ -382,7 +385,7 @@ class HttpContext
     /**
      * Get response status code
      */
-    public function responseStatus(): int
+    public function getResponseStatus(): int
     {
         return $this->status;
     }
@@ -416,10 +419,7 @@ class HttpContext
     }
 
     /**
-     * Resolve file path within base directory
-     *
-     * This ensures that the resolved file is within the specified base directory
-     * to prevent directory traversal attacks.
+     * Ensure that the resolved file is within the specified base directory and exists.
      */
     private function getResolvedFilePath(string $baseDir, string $filePath): ?string
     {

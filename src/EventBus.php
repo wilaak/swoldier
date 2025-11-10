@@ -7,6 +7,7 @@ namespace Swoldier;
 class EventBus
 {
     private array $listeners = [];
+
     private array $wildcardListeners = [];
 
     /**

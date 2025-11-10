@@ -5,73 +5,119 @@ declare(strict_types=1);
 namespace Swoldier\Middleware;
 
 use Psr\Log\LoggerInterface;
+
 use Swoldier\HttpContext;
-use Swoole\{Table, Atomic};
+
+use Swoole\Table;
+
+use Closure, InvalidArgumentException;
 
 class ConnectionLimiter
 {
     private Table $table;
 
-    private Atomic $totalConnections;
+    private ?Closure $keyResolver;
 
-    private ?LoggerInterface $logger = null;
+    private ?Closure $onLimitExceeded;
 
     /**
-     * @param int $maxConnections Maximum total concurrent connections allowed
-     * @param int $maxConnectionsPerIp Maximum concurrent connections allowed per IP
+     * ConnectionLimiter Middleware
+     *
+     * Support per-IP, global, or custom (user-defined) connection limiting scopes.
+     *
+     * @param int $maxConnections            Maximum concurrent connections
+     * @param string $scope                  Limiting scope: 'ip', 'global', or 'custom'
+     * @param LoggerInterface|null $logger   Optional PSR-3 logger for limit events
+     * @param callable|null $onLimitExceeded Callback when limit is exceeded. function(HttpContext $ctx): void
+     * @param callable|null $keyResolver     Custom key resolver for 'custom' scope. function(HttpContext $ctx): string
+     * @param int $tableSize                 Swoole table size (default 65536, or 1 for 'global')
+     *
+     * Usage examples:
+     * ```php
+     * // Per-IP connection limiting
+     * $app->use(new ConnectionLimiter(2, 'ip'));
+     *
+     * // Global connection limit
+     * $app->use(new ConnectionLimiter(1000, 'global'));
+     *
+     * // Custom connection limiting
+     * $app->use(new ConnectionLimiter(
+     *     3, 'custom',
+     *     keyResolver: fn(HttpContext $ctx) => $ctx->getHeader('X-User-Id') ?? 'guest'
+     * ));
+     *
+     * // With custom onLimitExceeded callback
+     * $app->use(new ConnectionLimiter(
+     *     onLimitExceeded: function(HttpContext $ctx) {
+     *         $ctx->text('Too many connections', 429);
+     *     }
+     * ));
+     * ```
      */
     public function __construct(
-        private int $maxConnections = 1000,
-        private int $maxConnectionsPerIp = 1,
-        private int $workerId = 0
+        private int $maxConnections = 25,
+        private string $scope = 'ip',
+        private ?LoggerInterface $logger = null,
+        ?callable $onLimitExceeded = null,
+        ?callable $keyResolver = null,
+        int $tableSize = 65536,
     ) {
-        $table = new Table($maxConnections + 1024);
+        if (!in_array($scope, ['ip', 'global', 'custom'], true)) {
+            throw new InvalidArgumentException("Invalid scope '$scope'. Must be 'ip', 'global', or 'custom'.");
+        }
+        if (isset($onLimitExceeded)) {
+            $onLimitExceeded = Closure::fromCallable($onLimitExceeded);
+        }
+        if (isset($keyResolver)) {
+            $keyResolver = Closure::fromCallable($keyResolver);
+        }
+        if ($scope === 'global') {
+            $tableSize = 1;
+        }
+        $table = new Table($tableSize);
         $table->column('count', Table::TYPE_INT);
         $table->create();
+        $this->scope = $scope;
         $this->table = $table;
-        $this->totalConnections = new Atomic(0);
-    }
-
-    /**
-     * @param LoggerInterface $logger Logger instance for logging
-     */
-    public function setLogger(LoggerInterface $logger): void
-    {
-        $this->logger = $logger;
+        $this->onLimitExceeded = $onLimitExceeded;
+        $this->keyResolver = $keyResolver;
     }
 
     public function __invoke(HttpContext $ctx, callable $next)
     {
-        $maxTotal = $this->maxConnections;
-        $maxPerIp = $this->maxConnectionsPerIp;
+        $key = match ($this->scope) {
+            'ip' => $ctx->getIp(),
+            'global' => '__global__',
+            'custom' => ($this->keyResolver) ? ($this->keyResolver)($ctx) : '__custom__',
+            default => $ctx->getIp(),
+        };
+
         $table = $this->table;
-        $atomic = $this->totalConnections;
 
-        $ip = $ctx->ip();
-        $count = $table->get($ip, 'count') ?? 0;
-        $totalConnections = $atomic->get();
-
-        if ($totalConnections >= $maxTotal) {
-            $ctx->abort();
-            $this->logger?->error("Total connection limit exceeded: {$totalConnections} connections");
+        $count = $table->get($key, 'count') ?? 0;
+        if ($count >= $this->maxConnections) {
+            if ($this->onLimitExceeded) {
+                ($this->onLimitExceeded)($ctx);
+            } else {
+                $ctx->text('Too Many Connections', 429);
+            }
+            $this->logger?->warning("Connection limit exceeded for {$key}: {$count} connections");
             return;
         }
 
-        if ($count >= $maxPerIp) {
-            $ctx->abort();
-            $this->logger?->warning("Connection limit exceeded for {$ip}: {$count} connections");
-            return;
-        }
+        // Increment connection count
+        $table->set($key, ['count' => $count + 1]);
 
-        $table->set($ip, ['count' => $count + 1]);
-        $atomic->add(1);
-        $next($ctx);
-        $newCount = ($table->get($ip, 'count') ?? 1) - 1;
-        if ($newCount > 0) {
-            $table->set($ip, ['count' => $newCount]);
-        } else {
-            $table->del($ip);
+        try {
+            $next($ctx);
+        } finally {
+            // Decrement connection count
+            $newCount = ($table->get($key, 'count') ?? 1) - 1;
+            if ($newCount > 0) {
+                $table->set($key, ['count' => $newCount]);
+            } else {
+                $table->del($key);
+            }
         }
-        $atomic->sub(1);
     }
 }
